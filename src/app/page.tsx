@@ -10,6 +10,7 @@ import { HistoryView } from '@/components/HistoryView';
 import { SettingsModal } from '@/components/SettingsModal';
 import { HandoverModal } from '@/components/HandoverModal';
 import { AdminAuthModal } from '@/components/AdminAuthModal';
+import { OperatorManageModal } from '@/components/OperatorManageModal';
 import { PremixItem, PremixHandoverRow, ShiftInfo, HandoverReport, AppSettings } from '@/types';
 import {
   getStoredCatalog,
@@ -33,6 +34,9 @@ import {
   getLastSubmittedReport,
   getStoredIsAdmin,
   saveStoredIsAdmin,
+  getStoredOperatorsList,
+  saveStoredOperatorsList,
+  DEFAULT_OPERATORS_LIST,
 } from '@/lib/storage';
 import { createInitialHandoverRows } from '@/lib/defaultPremixData';
 import { fetchLatestStocksFromGoogleSheet } from '@/lib/googleSheet';
@@ -42,6 +46,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('scanner');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
+  const [isOperatorManageOpen, setIsOperatorManageOpen] = useState(false);
   const [autoReceipt, setAutoReceipt] = useState(true);
   const [isFetchingSheet, setIsFetchingSheet] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -52,12 +57,15 @@ export default function Home() {
   const [shiftInfo, setShiftInfo] = useState<ShiftInfo>(getStoredShiftInfo());
   const [history, setHistory] = useState<HandoverReport[]>([]);
   const [settings, setSettings] = useState<AppSettings>(getStoredSettings());
+  const [operatorsList, setOperatorsList] = useState<string[]>(DEFAULT_OPERATORS_LIST);
 
   useEffect(() => {
     setIsClient(true);
     const storedCatalog = getStoredCatalog();
     const storedRows = getStoredCurrentRows(storedCatalog);
     const storedSettings = getStoredSettings();
+    const storedOperators = getStoredOperatorsList();
+    setOperatorsList(storedOperators);
 
     // Kiểm tra quyền Admin (qua localStorage hoặc query param ?admin=1 hoặc ?pin=...)
     const storedIsAdmin = getStoredIsAdmin();
@@ -570,6 +578,14 @@ export default function Home() {
     setHistory(getStoredHistory());
   };
 
+  const handleUpdateOperatorsList = (newList: string[]) => {
+    setOperatorsList(newList);
+    saveStoredOperatorsList(newList);
+    const updated = { ...settings, operatorsList: newList };
+    setSettings(updated);
+    saveSettings(updated);
+  };
+
   if (!isClient) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
@@ -602,6 +618,8 @@ export default function Home() {
           saveStoredIsAdmin(false);
           if (activeTab === 'catalog') setActiveTab('scanner');
         }}
+        operatorsList={operatorsList}
+        onOpenOperatorManage={() => setIsOperatorManageOpen(true)}
       />
 
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -686,6 +704,7 @@ export default function Home() {
         onSaveHistoryOnly={handleSaveToHistory}
         nextShiftData={nextShiftPreview}
         googleSheetUrl={settings.googleSheetUrl}
+        operatorsList={operatorsList}
       />
 
       {isAdmin && (
@@ -704,6 +723,17 @@ export default function Home() {
         onSuccess={() => {
           setIsAdmin(true);
           saveStoredIsAdmin(true);
+        }}
+      />
+
+      <OperatorManageModal
+        isOpen={isOperatorManageOpen}
+        onClose={() => setIsOperatorManageOpen(false)}
+        operatorsList={operatorsList}
+        currentOperator={shiftInfo.operatorName}
+        onUpdateOperatorsList={handleUpdateOperatorsList}
+        onSelectOperator={(name) => {
+          handleShiftInfoChange({ ...shiftInfo, operatorName: name });
         }}
       />
     </main>

@@ -2,7 +2,7 @@
 
 import React, { useRef } from 'react';
 import { ShiftInfo, AppSettings } from '../types';
-import { Scale, Calendar, Clock, User, Cpu, Settings as SettingsIcon, Layers, FileSpreadsheet, ShieldCheck, CheckSquare, ArrowRight, Lock, Unlock, ShieldAlert } from 'lucide-react';
+import { Scale, Calendar, Clock, User, Users, Cpu, Settings as SettingsIcon, Layers, FileSpreadsheet, ShieldCheck, CheckSquare, ArrowRight, Lock, Unlock, ShieldAlert } from 'lucide-react';
 
 interface HeaderProps {
   shiftInfo: ShiftInfo;
@@ -19,6 +19,8 @@ interface HeaderProps {
   isAdmin: boolean;
   onOpenAdminLogin: () => void;
   onLockAdmin: () => void;
+  operatorsList: string[];
+  onOpenOperatorManage: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,6 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
   isAdmin,
   onOpenAdminLogin,
   onLockAdmin,
+  operatorsList,
+  onOpenOperatorManage,
 }) => {
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -199,17 +203,44 @@ export const Header: React.FC<HeaderProps> = ({
               </select>
             </div>
 
-            {/* Nhân viên cân */}
+            {/* Người làm báo cáo / Nhân viên cân */}
             <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1.5 rounded-md border border-slate-700">
-              <User className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400 text-[11px]">NV cân:</span>
-              <input
-                type="text"
-                placeholder="Tên nhân viên..."
+              <User className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-400 text-[11px] whitespace-nowrap">NV cân:</span>
+              <select
                 value={shiftInfo.operatorName}
-                onChange={(e) => onShiftInfoChange({ ...shiftInfo, operatorName: e.target.value })}
-                className="bg-transparent text-white focus:outline-none w-24 sm:w-28 placeholder-slate-500 font-semibold"
-              />
+                onChange={(e) => {
+                  if (e.target.value === '__manage__') {
+                    onOpenOperatorManage();
+                  } else {
+                    onShiftInfoChange({ ...shiftInfo, operatorName: e.target.value });
+                  }
+                }}
+                className="bg-transparent text-white font-bold font-mono focus:outline-none cursor-pointer text-xs"
+              >
+                {operatorsList.map((op) => (
+                  <option key={op} value={op} className="bg-slate-900 text-white font-sans">
+                    {op}
+                  </option>
+                ))}
+                {!operatorsList.includes(shiftInfo.operatorName) && shiftInfo.operatorName && (
+                  <option value={shiftInfo.operatorName} className="bg-slate-900 text-white font-sans">
+                    {shiftInfo.operatorName}
+                  </option>
+                )}
+                <option value="__manage__" className="bg-slate-900 text-emerald-400 font-bold font-sans">
+                  ⚙️ Thêm / Xóa thành viên...
+                </option>
+              </select>
+
+              <button
+                type="button"
+                onClick={onOpenOperatorManage}
+                className="p-0.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-700 rounded transition-colors ml-0.5"
+                title="Quản lý danh sách người làm báo cáo (Thêm / Xóa)"
+              >
+                <Users className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 

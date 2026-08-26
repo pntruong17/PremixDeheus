@@ -10,18 +10,30 @@ const KEYS = {
   AUTO_RECEIPT_ENABLED: 'premix_deheus_auto_receipt',
   LAST_SUBMITTED_REPORT: 'premix_deheus_last_submitted',
   IS_ADMIN_SESSION: 'premix_deheus_is_admin',
+  OPERATORS_LIST: 'premix_deheus_operators_list',
 };
+
+export const DEFAULT_OPERATORS_LIST: string[] = [
+  'T.Trường',
+  'N.Trường',
+  'Phong',
+  'Kiệt',
+  'Khải',
+  'Minh',
+  'Phương',
+];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: '',
   geminiModel: 'gemini-3.6-flash',
   companyName: 'De Heus Animal Nutrition',
-  defaultOperator: 'T. Trường',
+  defaultOperator: 'T.Trường',
   defaultTimeRange: '07h30 -> 15h30',
   defaultSection: '03F26',
   defaultRevision: '01',
   defaultTolerancePercent: 0.5,
   adminPin: '6322',
+  operatorsList: DEFAULT_OPERATORS_LIST,
 };
 
 /**
@@ -570,6 +582,28 @@ export function getStoredIsAdmin(): boolean {
 export function saveStoredIsAdmin(isAdmin: boolean): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(KEYS.IS_ADMIN_SESSION, isAdmin ? 'true' : 'false');
+}
+
+// === OPERATORS LIST ===
+export function getStoredOperatorsList(): string[] {
+  if (typeof window === 'undefined') return DEFAULT_OPERATORS_LIST;
+  try {
+    const raw = localStorage.getItem(KEYS.OPERATORS_LIST);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Error reading operators list:', e);
+  }
+  return DEFAULT_OPERATORS_LIST;
+}
+
+export function saveStoredOperatorsList(list: string[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(KEYS.OPERATORS_LIST, JSON.stringify(list));
 }
 
 /**

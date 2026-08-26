@@ -17,6 +17,7 @@ interface HandoverModalProps {
     nextRows: PremixHandoverRow[];
   };
   googleSheetUrl?: string;
+  operatorsList?: string[];
 }
 
 export const HandoverModal: React.FC<HandoverModalProps> = ({
@@ -27,6 +28,7 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
   onSaveHistoryOnly,
   nextShiftData,
   googleSheetUrl,
+  operatorsList = [],
 }) => {
   const [nextOperator, setNextOperator] = useState('');
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
@@ -78,144 +80,166 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-5 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 max-w-lg sm:max-w-xl w-full max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden">
+        {/* Sticky Header */}
+        <div className="shrink-0 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-3.5 sm:p-4 md:p-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold">Nộp Báo Cáo & Bàn Giao Ca Sản Xuất</h3>
-              <p className="text-xs text-slate-400">
-                Tự động đồng bộ Google Sheet & chuyển Tồn cuối $\rightarrow$ Tồn đầu ca tiếp theo
+              <h3 className="text-sm sm:text-base font-bold leading-tight">Nộp Báo Cáo & Bàn Giao Ca Sản Xuất</h3>
+              <p className="text-[10px] sm:text-xs text-slate-400 line-clamp-1 sm:line-clamp-none">
+                Tự động đồng bộ Google Sheet & chuyển Tồn cuối $\rightarrow$ Tồn đầu ca mới
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
+            title="Đóng"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-5 space-y-5">
+        {/* Scrollable Body Content */}
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-3 sm:space-y-4 overscroll-contain">
           {/* Card Ca Hiện Tại */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 1. Báo cáo ca đang nộp
               </span>
-              <span className="text-xs font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+              <span className="text-[11px] sm:text-xs font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
                 Ca {currentReport.shiftInfo.shiftNumber} ({currentReport.shiftInfo.timeRange})
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pt-1">
               <div>
-                <span className="text-slate-400 block text-[11px]">Ngày:</span>
-                <strong className="text-slate-800">{currentReport.shiftInfo.date}</strong>
+                <span className="text-slate-400 block text-[10px] sm:text-[11px]">Ngày:</span>
+                <strong className="text-slate-800 font-mono">{currentReport.shiftInfo.date}</strong>
               </div>
               <div>
-                <span className="text-slate-400 block text-[11px]">Người cân:</span>
-                <strong className="text-slate-800">{currentReport.shiftInfo.operatorName || '—'}</strong>
+                <span className="text-slate-400 block text-[10px] sm:text-[11px]">Người cân:</span>
+                <strong className="text-slate-800 truncate block">{currentReport.shiftInfo.operatorName || '—'}</strong>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Thực tế cân:</span>
+              <div className="col-span-2 sm:col-span-1">
+                <span className="text-slate-400 block text-[10px] sm:text-[11px]">Thực tế cân:</span>
                 <strong className="text-amber-600 font-mono font-black">{currentReport.totalActualUsedKg.toFixed(2)} kg</strong>
               </div>
             </div>
 
-            <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
-              <span className="text-slate-600 font-medium">Tổng tồn cuối bàn giao:</span>
-              <span className="text-emerald-700 font-mono font-black text-sm">
+            <div className="mt-2.5 pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
+              <span className="text-slate-600 font-medium text-[11px] sm:text-xs">Tổng tồn cuối bàn giao:</span>
+              <span className="text-emerald-700 font-mono font-black text-xs sm:text-sm">
                 {currentReport.totalClosingStockKg.toFixed(2)} kg
               </span>
             </div>
           </div>
 
           {/* Mũi tên chuyển giao */}
-          <div className="flex items-center justify-center -my-2">
-            <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Chuyển 100% Tồn Cuối làm Tồn Đầu Cho Ca Mới</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+          <div className="flex items-center justify-center">
+            <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Chuyển 100% Tồn Cuối $\rightarrow$ Tồn Đầu Ca Mới</span>
+              <ArrowRight className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             </div>
           </div>
 
           {/* Card Ca Tiếp Theo */}
-          <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-4">
+          <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 sm:p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">
                 2. Thiết lập cho ca tiếp theo
               </span>
-              <span className="text-xs font-black bg-emerald-600 text-white px-2 py-0.5 rounded">
+              <span className="text-[11px] sm:text-xs font-black bg-emerald-600 text-white px-2 py-0.5 rounded">
                 Ca {nextShiftData.nextShiftInfo.shiftNumber} ({nextShiftData.nextShiftInfo.timeRange})
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs pt-1">
               <div>
-                <span className="text-slate-500 block text-[11px]">Ngày ca mới:</span>
-                <strong className="text-slate-800">{nextShiftData.nextShiftInfo.date}</strong>
+                <span className="text-slate-500 block text-[10px] sm:text-[11px] mb-0.5">Ngày ca mới:</span>
+                <div className="bg-white border border-emerald-300/80 rounded-lg px-2.5 py-1.5 font-mono font-bold text-slate-800 text-xs">
+                  {nextShiftData.nextShiftInfo.date}
+                </div>
               </div>
+
               <div>
-                <label className="text-slate-700 font-bold block text-[11px] mb-1">
+                <label className="text-slate-700 font-bold block text-[10px] sm:text-[11px] mb-0.5">
                   Nhân viên nhận ca tiếp theo:
                 </label>
-                <input
-                  type="text"
-                  placeholder="Tên nhân viên nhận ca..."
-                  value={nextOperator}
-                  onChange={(e) => setNextOperator(e.target.value)}
-                  className="w-full bg-white border border-emerald-300 rounded px-2.5 py-1 text-xs font-semibold focus:outline-none focus:border-emerald-600"
-                />
+                {operatorsList.length > 0 ? (
+                  <select
+                    value={nextOperator}
+                    onChange={(e) => setNextOperator(e.target.value)}
+                    className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 cursor-pointer"
+                  >
+                    <option value="">-- Chọn nhân viên nhận ca --</option>
+                    {operatorsList.map((op) => (
+                      <option key={op} value={op}>
+                        {op}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Tên nhân viên nhận ca..."
+                    value={nextOperator}
+                    onChange={(e) => setNextOperator(e.target.value)}
+                    className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                )}
               </div>
             </div>
           </div>
 
           {/* Google Sheet Sync Indicator */}
           {googleSheetUrl ? (
-            <div className="p-2.5 bg-emerald-100/60 border border-emerald-200 rounded-lg text-emerald-900 text-xs flex items-center gap-2">
+            <div className="p-2.5 bg-emerald-100/70 border border-emerald-200 rounded-lg text-emerald-950 text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Đã kết nối Google Sheet: Báo cáo sẽ tự động lưu và đồng bộ đa thiết bị!</span>
+              <span className="text-[11px] leading-tight">
+                <strong>Đã liên kết Google Sheet:</strong> Báo cáo sẽ tự động lưu và đồng bộ lên Google Drive.
+              </span>
             </div>
           ) : (
-            <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 text-[11px] flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>Chưa liên kết Google Sheet (Dữ liệu vẫn được lưu an toàn 100% trong bộ nhớ máy).</span>
+            <div className="p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 text-[11px] flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>Chưa liên kết Google Sheet (Dữ liệu vẫn được lưu an toàn trong máy).</span>
             </div>
           )}
 
           {syncStatusMsg && (
-            <div className="p-3 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold text-center animate-fadeIn flex items-center justify-center gap-2">
+            <div className="p-2.5 bg-emerald-100 text-emerald-900 rounded-lg text-xs font-bold text-center animate-fadeIn flex items-center justify-center gap-2">
               {isSyncingSheet && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
               <span>{syncStatusMsg}</span>
             </div>
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Sticky Footer Actions */}
+        <div className="shrink-0 p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => exportHandoverReportToExcel(currentReport)}
-            className="w-full sm:w-auto px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
+            className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            Xuất Excel Ca Này
+            <span>Xuất Excel Ca Này</span>
           </button>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={isSyncingSheet}
               onClick={handleSaveOnly}
-              className="flex-1 sm:flex-initial px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold"
+              className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-colors"
             >
               Chỉ Lưu Lịch Sử
             </button>
@@ -224,17 +248,17 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
               type="button"
               disabled={isSyncingSheet}
               onClick={handleHandoverNext}
-              className="flex-1 sm:flex-initial px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 active:scale-95"
+              className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 active:scale-95 transition-all"
             >
               {isSyncingSheet ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   <span>Đang Đồng Bộ...</span>
                 </>
               ) : (
                 <>
-                  <span>Nộp & Chuyển Sang Ca {nextShiftData.nextShiftInfo.shiftNumber}</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Nộp & Bàn Giao Ca {nextShiftData.nextShiftInfo.shiftNumber}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
             </button>

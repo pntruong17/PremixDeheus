@@ -9,6 +9,7 @@ import { PremixCatalog } from '@/components/PremixCatalog';
 import { HistoryView } from '@/components/HistoryView';
 import { SettingsModal } from '@/components/SettingsModal';
 import { HandoverModal } from '@/components/HandoverModal';
+import { AdminAuthModal } from '@/components/AdminAuthModal';
 import { PremixItem, PremixHandoverRow, ShiftInfo, HandoverReport, AppSettings } from '@/types';
 import {
   getStoredCatalog,
@@ -30,6 +31,8 @@ import {
   saveAutoReceipt,
   prepareNextShiftData,
   getLastSubmittedReport,
+  getStoredIsAdmin,
+  saveStoredIsAdmin,
 } from '@/lib/storage';
 import { createInitialHandoverRows } from '@/lib/defaultPremixData';
 import { fetchLatestStocksFromGoogleSheet } from '@/lib/googleSheet';
@@ -41,6 +44,8 @@ export default function Home() {
   const [isHandoverOpen, setIsHandoverOpen] = useState(false);
   const [autoReceipt, setAutoReceipt] = useState(true);
   const [isFetchingSheet, setIsFetchingSheet] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminAuthOpen, setIsAdminAuthOpen] = useState(false);
 
   const [catalog, setCatalog] = useState<PremixItem[]>([]);
   const [rows, setRows] = useState<PremixHandoverRow[]>([]);
@@ -50,8 +55,45 @@ export default function Home() {
 
   useEffect(() => {
     setIsClient(true);
-    setCatalog(getStoredCatalog());
-    setRows(getStoredCurrentRows());
+    const storedCatalog = getStoredCatalog();
+    const storedRows = getStoredCurrentRows(storedCatalog);
+    const storedSettings = getStoredSettings();
+
+    // Kiểm tra quyền Admin (qua localStorage hoặc query param ?admin=1 hoặc ?pin=...)
+    const storedIsAdmin = getStoredIsAdmin();
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasAdminParam = urlParams.get('admin') === 'true' || urlParams.get('admin') === '1';
+    const pinParam = urlParams.get('pin');
+    const isParamAdmin = hasAdminParam || (pinParam && pinParam === (storedSettings.adminPin || '6322'));
+    const effectiveAdmin = storedIsAdmin || Boolean(isParamAdmin);
+
+    setIsAdmin(effectiveAdmin);
+    if (effectiveAdmin) saveStoredIsAdmin(true);
+
+    // Sắp xếp rows theo đúng thứ tự storedCatalog làm chuẩn
+    const codeOrderMap = new Map<string, number>();
+    storedCatalog.forEach((item, idx) => {
+      codeOrderMap.set(item.code, idx);
+      codeOrderMap.set(item.name.toLowerCase().trim(), idx);
+      codeOrderMap.set(item.id, idx);
+    });
+
+    const reorderedRows = [...storedRows].sort((a, b) => {
+      const orderA = codeOrderMap.has(a.code)
+        ? codeOrderMap.get(a.code)!
+        : codeOrderMap.has(a.name.toLowerCase().trim())
+        ? codeOrderMap.get(a.name.toLowerCase().trim())!
+        : 9999;
+      const orderB = codeOrderMap.has(b.code)
+        ? codeOrderMap.get(b.code)!
+        : codeOrderMap.has(b.name.toLowerCase().trim())
+        ? codeOrderMap.get(b.name.toLowerCase().trim())!
+        : 9999;
+      return orderA - orderB;
+    });
+
+    setCatalog(storedCatalog);
+    setRows(reorderedRows);
     setShiftInfo(getStoredShiftInfo());
     setHistory(getStoredHistory());
     setSettings(getStoredSettings());
@@ -84,6 +126,42 @@ export default function Home() {
   const handleUpdateCatalog = (newCatalog: PremixItem[]) => {
     setCatalog(newCatalog);
     saveCatalog(newCatalog);
+
+    // Đồng bộ thứ tự của các dòng trong báo cáo chính thức theo danh mục mới
+    const codeOrderMap = new Map<string, number>();
+    const catalogItemMap = new Map<string, PremixItem>();
+    newCatalog.forEach((item, idx) => {
+      codeOrderMap.set(item.code, idx);
+      codeOrderMap.set(item.name.toLowerCase().trim(), idx);
+      codeOrderMap.set(item.id, idx);
+      catalogItemMap.set(item.code, item);
+      catalogItemMap.set(item.id, item);
+    });
+
+    const reorderedRows = [...rows].sort((a, b) => {
+      const orderA = codeOrderMap.has(a.code)
+        ? codeOrderMap.get(a.code)!
+        : codeOrderMap.has(a.name.toLowerCase().trim())
+        ? codeOrderMap.get(a.name.toLowerCase().trim())!
+        : 9999;
+      const orderB = codeOrderMap.has(b.code)
+        ? codeOrderMap.get(b.code)!
+        : codeOrderMap.has(b.name.toLowerCase().trim())
+        ? codeOrderMap.get(b.name.toLowerCase().trim())!
+        : 9999;
+      return orderA - orderB;
+    });
+
+    const finalRows = reorderedRows.map((r) => {
+      const matched = catalogItemMap.get(r.code) || catalogItemMap.get(r.id);
+      if (matched && matched.pageNumber !== undefined && matched.pageNumber !== r.pageNumber) {
+        return { ...r, pageNumber: matched.pageNumber };
+      }
+      return r;
+    });
+
+    setRows(finalRows);
+    saveCurrentRows(finalRows);
   };
 
   const handleSaveSettings = (newSettings: AppSettings) => {
@@ -149,17 +227,63 @@ export default function Home() {
   };
 
   const handleBulkUpdateOpeningStock = (stockMap: { [code: string]: number }) => {
-    const updated = rows.map((r) => {
-      if (stockMap[r.code] !== undefined) {
+    const rowByCode = new Map<string, PremixHandoverRow>();
+    const rowByName = new Map<string, PremixHandoverRow>();
+    rows.forEach((r) => {
+      if (r.code) rowByCode.set(r.code.trim().toLowerCase(), r);
+      if (r.name) rowByName.set(r.name.trim().toLowerCase(), r);
+    });
+
+    const updated = catalog.map((item) => {
+      const itemCodeKey = (item.code || '').trim().toLowerCase();
+      const itemNameKey = (item.name || '').trim().toLowerCase();
+      const existing = (itemCodeKey && rowByCode.get(itemCodeKey)) || rowByName.get(itemNameKey);
+
+      const newOpening =
+        stockMap[item.code] !== undefined
+          ? stockMap[item.code]
+          : stockMap[item.name] !== undefined
+          ? stockMap[item.name]
+          : existing
+          ? existing.openingStock
+          : item.defaultOpeningStock || 0;
+
+      if (existing) {
         return recalculateRow(
-          { ...r, openingStock: stockMap[r.code] },
+          { ...existing, openingStock: newOpening, pageNumber: item.pageNumber },
           0.5,
           autoReceipt,
           catalog
         );
       }
-      return r;
+
+      return recalculateRow(
+        {
+          id: `row-${item.id}`,
+          code: item.code,
+          name: item.name,
+          openingStock: newOpening,
+          receivedQty: 0,
+          theoryExpression: '',
+          theoryTotal: 0,
+          actualExpression: '',
+          actualTotal: 0,
+          closingStock: newOpening,
+          lotNumber: item.defaultLotNumber || '',
+          diff: 0,
+          diffPercent: 0,
+          isWithinTolerance: true,
+          needsWarehouseReceipt: false,
+          suggestedReceiptQty: 0,
+          pageNumber: item.pageNumber,
+          notes: '',
+        },
+        0.5,
+        autoReceipt,
+        catalog
+      );
     });
+
     setRows(updated);
     saveCurrentRows(updated);
   };
@@ -471,6 +595,13 @@ export default function Home() {
         activeRowCount={totals.activeRowCount}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        isAdmin={isAdmin}
+        onOpenAdminLogin={() => setIsAdminAuthOpen(true)}
+        onLockAdmin={() => {
+          setIsAdmin(false);
+          saveStoredIsAdmin(false);
+          if (activeTab === 'catalog') setActiveTab('scanner');
+        }}
       />
 
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -482,7 +613,7 @@ export default function Home() {
               currentRows={rows}
               customApiKey={settings.geminiApiKey}
               onUpdateFromDualScales={handleUpdateFromDualScales}
-              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenSettings={() => (isAdmin ? setIsSettingsOpen(true) : setIsAdminAuthOpen(true))}
             />
 
             <DataTable
@@ -529,8 +660,8 @@ export default function Home() {
           />
         )}
 
-        {/* Tab 3: Danh Mục 43 Loại & Quy Cách Bao */}
-        {activeTab === 'catalog' && (
+        {/* Tab 3: Danh Mục 43 Loại & Quy Cách Bao (Chỉ Admin mới truy cập được) */}
+        {activeTab === 'catalog' && isAdmin && (
           <PremixCatalog
             catalog={catalog}
             onUpdateCatalog={handleUpdateCatalog}
@@ -557,11 +688,23 @@ export default function Home() {
         googleSheetUrl={settings.googleSheetUrl}
       />
 
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        onSaveSettings={handleSaveSettings}
+      {isAdmin && (
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          onSaveSettings={handleSaveSettings}
+        />
+      )}
+
+      <AdminAuthModal
+        isOpen={isAdminAuthOpen}
+        onClose={() => setIsAdminAuthOpen(false)}
+        correctPin={settings.adminPin || '6322'}
+        onSuccess={() => {
+          setIsAdmin(true);
+          saveStoredIsAdmin(true);
+        }}
       />
     </main>
   );

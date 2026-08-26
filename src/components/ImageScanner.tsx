@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Sparkles, RefreshCw, ZoomIn, ZoomOut, AlertCircle, CheckCircle, Image as ImageIcon, Info, Layers, Check } from 'lucide-react';
+import { Camera, Upload, Sparkles, RefreshCw, ZoomIn, ZoomOut, AlertCircle, CheckCircle, Info, Layers, Check } from 'lucide-react';
 import { PremixItem, PremixHandoverRow } from '../types';
 import { analyzeWeighingImage } from '../lib/gemini';
 
@@ -149,82 +149,6 @@ export const ImageScanner: React.FC<ImageScannerProps> = ({
     }
   };
 
-  // Mẫu ảnh giả lập thực tế cho cả 2 tháp cân (Tôm 5kg, Cá 2kg -> 5+2)
-  const handleLoadSampleBoth = () => {
-    // 1. Mẫu màn hình Cân Tôm
-    const canvasShrimp = document.createElement('canvas');
-    canvasShrimp.width = 600;
-    canvasShrimp.height = 380;
-    const ctxS = canvasShrimp.getContext('2d');
-    if (ctxS) {
-      ctxS.fillStyle = '#0f172a';
-      ctxS.fillRect(0, 0, 600, 380);
-      ctxS.strokeStyle = '#0284c7';
-      ctxS.lineWidth = 3;
-      ctxS.strokeRect(10, 10, 580, 360);
-
-      ctxS.fillStyle = '#38bdf8';
-      ctxS.font = 'bold 16px monospace';
-      ctxS.fillText('DE HEUS - BÁO CÁO CÂN THÁP CÁM TÔM', 30, 45);
-      ctxS.fillStyle = '#94a3b8';
-      ctxS.font = '12px monospace';
-      ctxS.fillText('NGÀY: 26/08/2026 | TỔNG SỐ MẺ: 12 MẺ', 30, 70);
-      ctxS.fillText('---------------------------------------------------------', 30, 90);
-
-      ctxS.fillStyle = '#f8fafc';
-      ctxS.font = '13px monospace';
-      ctxS.fillText('1. AQUALYSO STD             : Lý thuyết 18 kg  | Cân 17.98 kg', 30, 125);
-      ctxS.fillText('2. Muối (Dry Salt)          : Lý thuyết 108.16 | Cân 108.17 kg', 30, 155);
-      ctxS.fillText('3. MYCELIUM (STIMMUNOGUARD) : Lý thuyết 41 kg  | Cân 41.05 kg', 30, 185);
-      ctxS.fillText('4. CHOLINE CHLORID 60       : Lý thuyết 90 kg  | Cân 89.99 kg', 30, 215);
-      ctxS.fillText('5. BETAIN HCL 95%           : Lý thuyết 36 kg  | Cân 36.00 kg', 30, 245);
-      ctxS.fillText('6. Potassium chloride       : Lý thuyết 10 kg  | Cân 9.99 kg', 30, 275);
-
-      ctxS.fillStyle = '#4ade80';
-      ctxS.font = 'bold 14px monospace';
-      ctxS.fillText('TRẠNG THÁI: HOÀN TẤT CÂN CÁM TÔM', 30, 330);
-
-      setShrimpImage(canvasShrimp.toDataURL('image/jpeg', 0.9));
-    }
-
-    // 2. Mẫu màn hình Cân Cá
-    const canvasFish = document.createElement('canvas');
-    canvasFish.width = 600;
-    canvasFish.height = 380;
-    const ctxF = canvasFish.getContext('2d');
-    if (ctxF) {
-      ctxF.fillStyle = '#0f172a';
-      ctxF.fillRect(0, 0, 600, 380);
-      ctxF.strokeStyle = '#10b981';
-      ctxF.lineWidth = 3;
-      ctxF.strokeRect(10, 10, 580, 360);
-
-      ctxF.fillStyle = '#34d399';
-      ctxF.font = 'bold 16px monospace';
-      ctxF.fillText('DE HEUS - BÁO CÁO CÂN THÁP CÁM CÁ', 30, 45);
-      ctxF.fillStyle = '#94a3b8';
-      ctxF.font = '12px monospace';
-      ctxF.fillText('NGÀY: 26/08/2026 | TỔNG SỐ MẺ: 7 MẺ', 30, 70);
-      ctxF.fillText('---------------------------------------------------------', 30, 90);
-
-      ctxF.fillStyle = '#f8fafc';
-      ctxF.font = '13px monospace';
-      ctxF.fillText('1. AQUALYSO STD             : Lý thuyết 24 kg   | Cân 23.97 kg', 30, 125);
-      ctxF.fillText('2. MYCELIUM (STIMMUNOGUARD) : Lý thuyết 24 kg   | Cân 23.97 kg', 30, 155);
-      ctxF.fillText('3. CHOLINE CHLORID 60       : Lý thuyết 43.68   | Cân 43.69 kg', 30, 185);
-      ctxF.fillText('4. BETAIN HCL 95%           : Lý thuyết 12 kg   | Cân 11.99 kg', 30, 215);
-
-      ctxF.fillStyle = '#4ade80';
-      ctxF.font = 'bold 14px monospace';
-      ctxF.fillText('TRẠNG THÁI: HOÀN TẤT CÂN CÁM CÁ', 30, 330);
-
-      setFishImage(canvasFish.toDataURL('image/jpeg', 0.9));
-    }
-
-    setErrorMessage(null);
-    setSuccessMessage('Đã tải ảnh mẫu cho cả 2 Tháp Cân (Tôm & Cá). Hãy bấm nút "QUÉT CẢ 2 CÂN VÀ GỘP SỐ LIỆU" để kiểm tra!');
-  };
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-6">
       {/* Header */}
@@ -234,18 +158,7 @@ export const ImageScanner: React.FC<ImageScannerProps> = ({
             <Camera className="w-5 h-5 text-blue-600" />
             Chụp & Quét Ảnh 2 Tháp Cân: Cân Cám Tôm & Cân Cám Cá
           </h2>
-          <p className="text-xs text-slate-500">
-            Tự động gộp số lượng 2 cân thành dạng <code>18 + 24</code> hoặc <code>5 + 2</code>, nếu chỉ 1 cân dùng sẽ ghi 1 số đơn
-          </p>
         </div>
-
-        <button
-          onClick={handleLoadSampleBoth}
-          className="text-xs text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-lg font-bold border border-emerald-300 flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
-        >
-          <ImageIcon className="w-4 h-4 text-emerald-600" />
-          Nạp ảnh mẫu thử cả 2 Cân (Tôm + Cá)
-        </button>
       </div>
 
       {/* Grid 2 Vị Trí Up Ảnh: Cân Tôm & Cân Cá */}

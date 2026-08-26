@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { ShiftInfo, AppSettings } from '../types';
-import { Scale, Calendar, Clock, User, Cpu, Settings as SettingsIcon, Layers, FileSpreadsheet, ShieldCheck, CheckSquare, ArrowRight } from 'lucide-react';
+import { Scale, Calendar, Clock, User, Cpu, Settings as SettingsIcon, Layers, FileSpreadsheet, ShieldCheck, CheckSquare, ArrowRight, Lock, Unlock, ShieldAlert } from 'lucide-react';
 
 interface HeaderProps {
   shiftInfo: ShiftInfo;
@@ -16,6 +16,9 @@ interface HeaderProps {
   activeRowCount: number;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isAdmin: boolean;
+  onOpenAdminLogin: () => void;
+  onLockAdmin: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,7 +33,33 @@ export const Header: React.FC<HeaderProps> = ({
   activeRowCount,
   activeTab,
   setActiveTab,
+  isAdmin,
+  onOpenAdminLogin,
+  onLockAdmin,
 }) => {
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper chuyển đổi qua lại giữa DD/MM/YYYY và YYYY-MM-DD (cho input type="date")
+  const formatDateToIso = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split(/[\/\-]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return '';
+  };
+
+  const formatIsoToDisplay = (isoStr: string) => {
+    if (!isoStr) return '';
+    const parts = isoStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return isoStr;
+  };
   return (
     <header className="bg-slate-900 text-white shadow-lg border-b border-slate-800 no-print">
       {/* Top Banner */}
@@ -50,9 +79,6 @@ export const Header: React.FC<HeaderProps> = ({
                   De Heus • {shiftInfo.sectionCode || '03F26'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Tự động nối ca: Tồn cuối ca trước $\rightarrow$ Tồn đầu ca sau (3 ca/ngày)
-              </p>
             </div>
           </div>
 
@@ -86,56 +112,90 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Nộp & Bàn Giao Ca</span>
             </button>
 
-            <button
-              onClick={onOpenSettings}
-              className="p-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all flex items-center gap-1.5 text-xs font-medium"
-              title="Cài đặt hệ thống & Cấu hình"
-            >
-              <SettingsIcon className="w-4 h-4 text-slate-300" />
-            </button>
+            {/* Quyền Quản Trị (Admin): Nút Cài Đặt & Nút Khóa / Mở Khóa */}
+            {isAdmin ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="p-2 rounded-lg border border-blue-500/50 bg-blue-900/40 hover:bg-blue-800/60 text-blue-200 hover:text-white transition-all flex items-center gap-1.5 text-xs font-bold shadow-sm"
+                  title="Cài đặt hệ thống & Cấu hình (Quản trị viên)"
+                >
+                  <SettingsIcon className="w-4 h-4 text-blue-300 animate-spin-slow" />
+                  <span className="hidden sm:inline">Cài đặt</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onLockAdmin}
+                  className="p-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-rose-900/40 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 transition-all flex items-center gap-1 text-xs"
+                  title="Đang ở chế độ Quản trị viên (Bấm để Khóa lại cho nhân viên dùng)"
+                >
+                  <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline text-[11px] font-semibold text-emerald-300">Admin</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenAdminLogin}
+                className="p-2 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-slate-300 transition-all flex items-center gap-1"
+                title="Đăng nhập Quản trị viên"
+              >
+                <Lock className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Shift Selector Toolbar */}
         <div className="mt-3 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* Ngày */}
-            <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1.5 rounded-md border border-slate-700">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            {/* Ngày - Bấm vào hiện lịch */}
+            <div
+              onClick={() => dateInputRef.current?.showPicker?.()}
+              className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-800 px-2.5 py-1.5 rounded-md border border-slate-700 hover:border-blue-500/50 transition-colors cursor-pointer"
+              title="Nhấp để mở lịch chọn ngày"
+            >
+              <Calendar className="w-3.5 h-3.5 text-blue-400" />
               <span className="text-slate-400 text-[11px]">Ngày:</span>
               <input
-                type="text"
-                value={shiftInfo.date}
-                onChange={(e) => onShiftInfoChange({ ...shiftInfo, date: e.target.value })}
-                className="bg-transparent text-white focus:outline-none w-24 sm:w-28 font-mono font-bold"
-                placeholder="DD/MM/YYYY"
+                ref={dateInputRef}
+                type="date"
+                value={formatDateToIso(shiftInfo.date)}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    onShiftInfoChange({
+                      ...shiftInfo,
+                      date: formatIsoToDisplay(e.target.value),
+                    });
+                  }
+                }}
+                className="bg-transparent text-white focus:outline-none font-mono font-bold text-xs cursor-pointer [color-scheme:dark]"
               />
             </div>
 
-            {/* Khung giờ */}
-            <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1.5 rounded-md border border-slate-700">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400 text-[11px]">Giờ:</span>
-              <input
-                type="text"
-                value={shiftInfo.timeRange}
-                onChange={(e) => onShiftInfoChange({ ...shiftInfo, timeRange: e.target.value })}
-                className="bg-transparent text-white focus:outline-none w-32 font-mono"
-                placeholder="07h30 -> 15h30"
-              />
-            </div>
-
-            {/* Ca sx */}
+            {/* Ca sx (đã kèm sẵn khung giờ) */}
             <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1.5 rounded-md border border-slate-700">
               <span className="text-slate-400 text-[11px]">Ca sx:</span>
               <select
                 value={shiftInfo.shiftNumber}
-                onChange={(e) => onShiftInfoChange({ ...shiftInfo, shiftNumber: e.target.value })}
+                onChange={(e) => {
+                  const num = e.target.value;
+                  let tr = '06h00 -> 14h00';
+                  if (num === '2') tr = '14h00 -> 22h00';
+                  else if (num === '3') tr = '22h00 -> 06h00';
+                  onShiftInfoChange({
+                    ...shiftInfo,
+                    shiftNumber: num,
+                    timeRange: tr,
+                  });
+                }}
                 className="bg-transparent text-white font-bold font-mono focus:outline-none cursor-pointer"
               >
                 <option value="1" className="bg-slate-900 text-white">Ca 1 (06h - 14h)</option>
                 <option value="2" className="bg-slate-900 text-white">Ca 2 (14h - 22h)</option>
-                <option value="3" className="bg-slate-900 text-white">Ca 3 (22h - 06h / 07h30 - 15h30)</option>
+                <option value="3" className="bg-slate-900 text-white">Ca 3 (22h - 06h)</option>
               </select>
             </div>
 
@@ -162,31 +222,33 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs - Ẩn tab Danh Mục nếu không phải Admin */}
         <nav className="flex space-x-1 sm:space-x-2 mt-3 overflow-x-auto pb-1">
           {[
-            { id: 'scanner', label: '1. Quét Ảnh & Nhập Phiếu', icon: Cpu },
-            { id: 'report', label: '2. Mẫu Báo Cáo De Heus & Xuất Excel', icon: FileSpreadsheet },
-            { id: 'catalog', label: '3. Danh Mục 43 Loại & Quy Cách Bao', icon: Layers },
-            { id: 'history', label: '4. Lịch Sử Báo Cáo Ca', icon: Clock },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
+            { id: 'scanner', label: '1. Quét Ảnh & Nhập Phiếu', icon: Cpu, adminOnly: false },
+            { id: 'report', label: '2. Mẫu Báo Cáo De Heus & Xuất Excel', icon: FileSpreadsheet, adminOnly: false },
+            { id: 'catalog', label: '3. Danh Mục 43 Loại & Quy Cách Bao', icon: Layers, adminOnly: true },
+            { id: 'history', label: '4. Lịch Sử Báo Cáo Ca', icon: Clock, adminOnly: false },
+          ]
+            .filter((tab) => !tab.adminOnly || isAdmin)
+            .map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
         </nav>
       </div>
     </header>

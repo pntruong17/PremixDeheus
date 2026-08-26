@@ -313,6 +313,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Section 4: Admin PIN Security */}
+          <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4 space-y-2">
+            <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+              🔒 Mã PIN Bảo Vệ Quản Trị Viên (Admin PIN)
+            </label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={formData.adminPin || '6322'}
+                onChange={(e) => setFormData({ ...formData, adminPin: e.target.value.trim() })}
+                placeholder="6322"
+                className="w-48 px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <span className="text-[11px] text-amber-800">
+                (Dùng để mở khóa <strong>Cài đặt</strong> và <strong>Danh mục 43 loại</strong> cho riêng bạn)
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}

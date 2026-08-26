@@ -30,7 +30,7 @@ export interface PremixHandoverRow {
   theoryTotal: number; // Tổng lý thuyết (kg)
   actualExpression: string; // Số lượng sử dụng THỰC TẾ (KG), vd: "17.98 + 23.97" hoặc "8.01"
   actualTotal: number; // Tổng thực tế (kg)
-  closingStock: number; // Tồn cuối KG = Tồn đầu + SL nhận - Thực tế
+  closingStock: number; // Tồn cuối KG = Tồn đầu + SL nhận - Lý thuyết
   lotNumber: string; // Số lô (vd: 030826 PO - 1147 - RMR 2)
   diff: number; // Thực tế - Lý thuyết
   diffPercent: number;
@@ -77,6 +77,7 @@ export interface AppSettings {
   defaultSection: string;
   defaultRevision: string;
   defaultTolerancePercent: number;
+  adminPin?: string; // Mã PIN bảo vệ mục Cấu hình & Danh mục (Mặc định: 6322)
   googleSheetUrl?: string; // URL Google Apps Script Web App để đồng bộ Google Sheet
   autoSyncSheet?: boolean; // Tự động đồng bộ lên Google Sheet khi nộp ca
 }

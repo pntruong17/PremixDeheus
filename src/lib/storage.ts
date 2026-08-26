@@ -9,6 +9,7 @@ const KEYS = {
   APP_SETTINGS: 'premix_deheus_settings',
   AUTO_RECEIPT_ENABLED: 'premix_deheus_auto_receipt',
   LAST_SUBMITTED_REPORT: 'premix_deheus_last_submitted',
+  IS_ADMIN_SESSION: 'premix_deheus_is_admin',
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultSection: '03F26',
   defaultRevision: '01',
   defaultTolerancePercent: 0.5,
+  adminPin: '6322',
 };
 
 /**
@@ -64,6 +66,7 @@ export function getPremixBagSize(code?: string, name?: string, catalog: PremixIt
 /**
  * Thuật toán TỰ ĐỘNG TÍNH SỐ LƯỢNG NHẬN KHO (SL Nhận):
  * Tồn cuối C = O + R - U phải thoả mãn 0 <= C < BagSize
+ * (Trong đó U là số lượng sử dụng Lý Thuyết)
  */
 export function calculateAutoWarehouseReceipt(
   openingStock: number,
@@ -123,7 +126,8 @@ export function evaluateExpression(expr: string | number | undefined): number {
 }
 
 /**
- * Tính toán tự động cho 1 dòng nguyên liệu
+ * Tính toán tự động cho 1 dòng nguyên liệu:
+ * TỒN CUỐI = Tồn đầu + SL Nhận - SỬ DỤNG LÝ THUYẾT
  */
 export function recalculateRow(
   row: PremixHandoverRow,
@@ -135,28 +139,27 @@ export function recalculateRow(
   const actualTotal = evaluateExpression(row.actualExpression);
   const opening = Number(row.openingStock) || 0;
   
-  const usedForReceipt = actualTotal > 0 ? actualTotal : theoryTotal;
   const bagSize = getPremixBagSize(row.code, row.name, catalog);
 
   let received = Number(row.receivedQty) || 0;
 
   if (autoDecideReceipt) {
-    const autoCalc = calculateAutoWarehouseReceipt(opening, usedForReceipt, bagSize);
+    const autoCalc = calculateAutoWarehouseReceipt(opening, theoryTotal, bagSize);
     received = autoCalc.receivedQty;
   }
 
-  const effectiveUsed = actualTotal > 0 ? actualTotal : theoryTotal;
-  const closingStock = Number((opening + received - actualTotal).toFixed(3));
+  // Tồn cuối = Tồn đầu + SL Nhận - LÝ THUYẾT (trừ ra cho số lượng lý thuyết)
+  const closingStock = Number((opening + received - theoryTotal).toFixed(3));
   const diff = Number((actualTotal - theoryTotal).toFixed(3));
   const diffPercent = theoryTotal > 0 ? Number(((diff / theoryTotal) * 100).toFixed(2)) : 0;
   const isWithinTolerance = theoryTotal === 0 ? true : Math.abs(diffPercent) <= tolerancePercent;
 
   const effectiveAvailable = opening + received;
-  const needsWarehouseReceipt = effectiveUsed > 0 && effectiveAvailable < effectiveUsed;
+  const needsWarehouseReceipt = theoryTotal > 0 && effectiveAvailable < theoryTotal;
   
   let suggestedReceiptQty = 0;
   if (needsWarehouseReceipt) {
-    const shortage = effectiveUsed - opening;
+    const shortage = theoryTotal - opening;
     const numBags = Math.ceil(shortage / bagSize);
     suggestedReceiptQty = Math.max(numBags * bagSize, bagSize);
   }
@@ -369,18 +372,67 @@ export function saveCatalog(catalog: PremixItem[]): void {
 }
 
 // === CURRENT ROWS ===
-export function getStoredCurrentRows(): PremixHandoverRow[] {
-  if (typeof window === 'undefined') return createInitialHandoverRows();
+export function getStoredCurrentRows(catalog: PremixItem[] = DEFAULT_PREMIX_LIST): PremixHandoverRow[] {
+  if (typeof window === 'undefined') return createInitialHandoverRows(catalog);
   try {
     const raw = localStorage.getItem(KEYS.CURRENT_ROWS);
     if (raw) {
       const parsed: PremixHandoverRow[] = JSON.parse(raw);
-      return parsed.map(r => recalculateRow(r, 0.5, false));
+      const rowByCode = new Map<string, PremixHandoverRow>();
+      const rowByName = new Map<string, PremixHandoverRow>();
+      parsed.forEach((r) => {
+        if (r.code) rowByCode.set(r.code.trim().toLowerCase(), r);
+        if (r.name) rowByName.set(r.name.trim().toLowerCase(), r);
+      });
+
+      // Tự động bảo đảm đầy đủ 100% tất cả các loại trong catalog, đúng thứ tự chuẩn
+      return catalog.map((item) => {
+        const itemCodeKey = (item.code || '').trim().toLowerCase();
+        const itemNameKey = (item.name || '').trim().toLowerCase();
+        const existing = (itemCodeKey && rowByCode.get(itemCodeKey)) || rowByName.get(itemNameKey);
+
+        if (existing) {
+          return recalculateRow(
+            {
+              ...existing,
+              id: existing.id || `row-${item.id}`,
+              code: item.code,
+              name: item.name,
+              pageNumber: item.pageNumber,
+            },
+            0.5,
+            false,
+            catalog
+          );
+        }
+
+        const opening = item.defaultOpeningStock || 0;
+        return {
+          id: `row-${item.id}`,
+          code: item.code,
+          name: item.name,
+          openingStock: opening,
+          receivedQty: 0,
+          theoryExpression: '',
+          theoryTotal: 0,
+          actualExpression: '',
+          actualTotal: 0,
+          closingStock: opening,
+          lotNumber: item.defaultLotNumber || '',
+          diff: 0,
+          diffPercent: 0,
+          isWithinTolerance: true,
+          needsWarehouseReceipt: false,
+          suggestedReceiptQty: 0,
+          pageNumber: item.pageNumber,
+          notes: '',
+        };
+      });
     }
   } catch (e) {
     console.error('Error reading current rows:', e);
   }
-  return createInitialHandoverRows();
+  return createInitialHandoverRows(catalog);
 }
 
 export function saveCurrentRows(rows: PremixHandoverRow[]): void {
@@ -503,6 +555,21 @@ export function getStoredSettings(): AppSettings {
 export function saveSettings(settings: AppSettings): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(KEYS.APP_SETTINGS, JSON.stringify(settings));
+}
+
+// === ADMIN AUTH SESSION ===
+export function getStoredIsAdmin(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(KEYS.IS_ADMIN_SESSION) === 'true';
+  } catch (e) {
+    return false;
+  }
+}
+
+export function saveStoredIsAdmin(isAdmin: boolean): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(KEYS.IS_ADMIN_SESSION, isAdmin ? 'true' : 'false');
 }
 
 /**

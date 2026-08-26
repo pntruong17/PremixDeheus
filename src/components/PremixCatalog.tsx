@@ -4,7 +4,23 @@ import React, { useState } from 'react';
 import { PremixItem } from '../types';
 import { exportCatalogToExcel } from '../lib/excelExport';
 import { DEFAULT_PREMIX_LIST } from '../lib/defaultPremixData';
-import { Plus, Search, Edit2, Trash2, Download, RotateCcw, Check, X, Layers, Tag, Package } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Download,
+  RotateCcw,
+  Check,
+  X,
+  Layers,
+  Tag,
+  Package,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Info,
+} from 'lucide-react';
 
 interface PremixCatalogProps {
   catalog: PremixItem[];
@@ -18,10 +34,13 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Partial<PremixItem>>({
     code: '',
     name: '',
     category: 'Chung',
+    pageNumber: 1,
     defaultWeight: 10,
     unit: 'kg',
     bagPackagingKg: 25,
@@ -40,6 +59,68 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
     return matchesSearch && matchesCat;
   });
 
+  // --- REORDER HANDLERS ---
+  const handleMove = (id: string, delta: number) => {
+    const fromIndex = catalog.findIndex((i) => i.id === id);
+    if (fromIndex === -1) return;
+    const toIndex = fromIndex + delta;
+    if (toIndex < 0 || toIndex >= catalog.length) return;
+
+    const newCatalog = [...catalog];
+    const [moved] = newCatalog.splice(fromIndex, 1);
+    newCatalog.splice(toIndex, 0, moved);
+    onUpdateCatalog(newCatalog);
+  };
+
+  const handleJumpToPosition = (id: string, targetPos1Based: number) => {
+    if (isNaN(targetPos1Based) || targetPos1Based < 1) return;
+    const fromIndex = catalog.findIndex((i) => i.id === id);
+    if (fromIndex === -1) return;
+    const toIndex = Math.max(0, Math.min(catalog.length - 1, Math.round(targetPos1Based) - 1));
+    if (fromIndex === toIndex) return;
+
+    const newCatalog = [...catalog];
+    const [moved] = newCatalog.splice(fromIndex, 1);
+    newCatalog.splice(toIndex, 0, moved);
+    onUpdateCatalog(newCatalog);
+  };
+
+  // --- DRAG AND DROP HANDLERS ---
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverId !== targetId) {
+      setDragOverId(targetId);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (draggedId && draggedId !== targetId) {
+      const fromIndex = catalog.findIndex((i) => i.id === draggedId);
+      const toIndex = catalog.findIndex((i) => i.id === targetId);
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const newCatalog = [...catalog];
+        const [moved] = newCatalog.splice(fromIndex, 1);
+        newCatalog.splice(toIndex, 0, moved);
+        onUpdateCatalog(newCatalog);
+      }
+    }
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
   const handleSaveItem = () => {
     if (!editingItem.name || !editingItem.code) {
       alert('Vui lòng nhập Mã Premix và Tên Loại Premix.');
@@ -57,6 +138,7 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
         code: editingItem.code.toUpperCase().trim(),
         name: editingItem.name.trim(),
         category: editingItem.category || 'Chung',
+        pageNumber: Number(editingItem.pageNumber) || 1,
         defaultWeight: Number(editingItem.defaultWeight) || 0,
         unit: (editingItem.unit as any) || 'kg',
         bagPackagingKg: Number(editingItem.bagPackagingKg) || 25,
@@ -71,6 +153,7 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
       code: '',
       name: '',
       category: 'Chung',
+      pageNumber: 1,
       defaultWeight: 10,
       unit: 'kg',
       bagPackagingKg: 25,
@@ -102,7 +185,7 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
               Danh Mục 43 Loại Premix & Quy Cách Đóng Bao ({catalog.length} loại)
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Bạn có thể tự do chỉnh sửa quy cách bao (20kg, 25kg, 50kg, 850kg...) trực tiếp tại đây mà không cần sửa code!
+              Bạn có thể tự do chỉnh sửa quy cách bao và thay đổi vị trí của từng loại để làm chuẩn cho báo cáo chính thức!
             </p>
           </div>
 
@@ -114,6 +197,7 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
                   code: '',
                   name: '',
                   category: 'Chung',
+                  pageNumber: 1,
                   defaultWeight: 10,
                   unit: 'kg',
                   bagPackagingKg: 25,
@@ -146,6 +230,14 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
               <RotateCcw className="w-3.5 h-3.5" />
               Khôi phục mẫu 43 loại
             </button>
+          </div>
+        </div>
+
+        {/* Tip Box for Reordering */}
+        <div className="mt-3.5 bg-blue-50 border border-blue-200 rounded-lg p-2.5 flex items-start gap-2 text-xs text-blue-900">
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+          <div>
+            <strong>Đổi vị trí nguyên liệu:</strong> Nắm vào biểu tượng <code className="bg-blue-100 px-1 py-0.5 rounded font-bold">⠿</code> để kéo thả, dùng nút <span className="font-bold">⬆️ ⬇️</span> hoặc <strong>nhập trực tiếp số vị trí</strong> vào ô STT. Vị trí ở đây sẽ tự động làm chuẩn cho <strong>Báo cáo hàng ngày</strong>!
           </div>
         </div>
 
@@ -235,7 +327,21 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Nhóm / Trang</label>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Trang Báo Cáo (1 - 4)</label>
+              <select
+                value={editingItem.pageNumber || 1}
+                onChange={(e) => setEditingItem({ ...editingItem, pageNumber: parseInt(e.target.value, 10) || 1 })}
+                className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-semibold"
+              >
+                <option value={1}>Trang 1</option>
+                <option value={2}>Trang 2</option>
+                <option value={3}>Trang 3</option>
+                <option value={4}>Trang 4</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Nhóm</label>
               <input
                 type="text"
                 value={editingItem.category || ''}
@@ -268,7 +374,7 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
               />
             </div>
 
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">Mô tả / Chức năng</label>
               <input
                 type="text"
@@ -305,71 +411,164 @@ export const PremixCatalog: React.FC<PremixCatalogProps> = ({
         <table className="w-full text-left text-xs text-slate-700">
           <thead className="bg-slate-100/80 text-slate-800 font-bold border-b border-slate-200">
             <tr>
+              <th className="py-3 px-2 w-28 text-center bg-blue-50/50 text-blue-950">
+                Thứ Tự (STT)
+              </th>
               <th className="py-3 px-3 w-14 text-center">Trang</th>
               <th className="py-3 px-3 w-24">Mã Code</th>
               <th className="py-3 px-4 min-w-[200px]">Tên loại Premix</th>
               <th className="py-3 px-3 w-32 text-center bg-blue-50/60 text-blue-900">
                 📦 Quy cách đóng bao
               </th>
-              <th className="py-3 px-3 min-w-[150px]">Nhóm</th>
+              <th className="py-3 px-3 min-w-[140px]">Nhóm</th>
               <th className="py-3 px-3 min-w-[180px]">Số lô mặc định</th>
               <th className="py-3 px-3 min-w-[180px]">Mô tả</th>
               <th className="py-3 px-3 w-20 text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {filteredCatalog.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                <td className="py-2.5 px-3 text-center font-bold text-slate-500">
-                  T{item.pageNumber || 1}
-                </td>
-                <td className="py-2.5 px-3 font-mono font-bold text-blue-700">
-                  {item.code}
-                </td>
-                <td className="py-2.5 px-4 font-bold text-slate-900">
-                  {item.name}
-                </td>
-                <td className="py-2.5 px-3 text-center bg-blue-50/30">
-                  <span className="font-mono font-black text-xs text-blue-900 bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
-                    {item.bagPackagingKg || 25} kg / {item.bagPackagingKg && item.bagPackagingKg >= 800 ? 'túi' : 'bao'}
-                  </span>
-                </td>
-                <td className="py-2.5 px-3 text-slate-600">
-                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                    {item.category || 'Chung'}
-                  </span>
-                </td>
-                <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 truncate max-w-[180px]">
-                  {item.defaultLotNumber || '—'}
-                </td>
-                <td className="py-2.5 px-3 text-slate-500 text-[11px] truncate max-w-[200px]" title={item.description}>
-                  {item.description || '—'}
-                </td>
-                <td className="py-2.5 px-3 text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingItem({ ...item });
-                        setIsEditing(true);
-                      }}
-                      className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-blue-50"
-                      title="Chỉnh sửa quy cách bao hoặc tên"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteItem(item.id)}
-                      className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50"
-                      title="Xóa loại này"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {filteredCatalog.map((item) => {
+              const actualIndex = catalog.findIndex((i) => i.id === item.id);
+              const positionNumber = actualIndex + 1;
+              const isFirst = actualIndex === 0;
+              const isLast = actualIndex === catalog.length - 1;
+              const isDragging = draggedId === item.id;
+              const isDragOver = dragOverId === item.id && draggedId !== item.id;
+
+              return (
+                <tr
+                  key={item.id}
+                  draggable={true}
+                  onDragStart={(e) => handleDragStart(e, item.id)}
+                  onDragOver={(e) => handleDragOver(e, item.id)}
+                  onDrop={(e) => handleDrop(e, item.id)}
+                  onDragEnd={handleDragEnd}
+                  className={`transition-all ${
+                    isDragging
+                      ? 'opacity-40 bg-blue-50'
+                      : isDragOver
+                      ? 'bg-blue-100 border-t-2 border-blue-600'
+                      : 'hover:bg-slate-50'
+                  }`}
+                >
+                  {/* Cột Thứ Tự & Điều Khiển Vị Trí */}
+                  <td className="py-2 px-2 bg-blue-50/20">
+                    <div className="flex items-center justify-center gap-1">
+                      {/* Drag Handle Icon */}
+                      <span
+                        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-blue-600 p-0.5"
+                        title="Kéo & Thả để đổi vị trí"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </span>
+
+                      {/* Ô nhập số thứ tự trực tiếp */}
+                      <input
+                        type="number"
+                        min={1}
+                        max={catalog.length}
+                        defaultValue={positionNumber}
+                        key={`${item.id}-${positionNumber}`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = parseInt((e.target as HTMLInputElement).value, 10);
+                            handleJumpToPosition(item.id, val);
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (val !== positionNumber) {
+                            handleJumpToPosition(item.id, val);
+                          }
+                        }}
+                        className="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded py-0.5 text-blue-950 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        title="Nhập số thứ tự và nhấn Enter để chuyển nhanh vị trí"
+                      />
+
+                      {/* Nút Lên / Xuống */}
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          disabled={isFirst}
+                          onClick={() => handleMove(item.id, -1)}
+                          className={`p-0.5 rounded transition-colors ${
+                            isFirst
+                              ? 'text-slate-300 cursor-not-allowed'
+                              : 'text-slate-500 hover:text-blue-700 hover:bg-blue-100'
+                          }`}
+                          title="Di chuyển lên 1 dòng"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isLast}
+                          onClick={() => handleMove(item.id, 1)}
+                          className={`p-0.5 rounded transition-colors ${
+                            isLast
+                              ? 'text-slate-300 cursor-not-allowed'
+                              : 'text-slate-500 hover:text-blue-700 hover:bg-blue-100'
+                          }`}
+                          title="Di chuyển xuống 1 dòng"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td className="py-2.5 px-3 text-center font-bold text-slate-500">
+                    T{item.pageNumber || 1}
+                  </td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-blue-700">
+                    {item.code}
+                  </td>
+                  <td className="py-2.5 px-4 font-bold text-slate-900">
+                    {item.name}
+                  </td>
+                  <td className="py-2.5 px-3 text-center bg-blue-50/30">
+                    <span className="font-mono font-black text-xs text-blue-900 bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
+                      {item.bagPackagingKg || 25} kg / {item.bagPackagingKg && item.bagPackagingKg >= 800 ? 'túi' : 'bao'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-600">
+                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
+                      {item.category || 'Chung'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 truncate max-w-[180px]">
+                    {item.defaultLotNumber || '—'}
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-500 text-[11px] truncate max-w-[200px]" title={item.description}>
+                    {item.description || '—'}
+                  </td>
+                  <td className="py-2.5 px-3 text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingItem({ ...item });
+                          setIsEditing(true);
+                        }}
+                        className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-blue-50"
+                        title="Chỉnh sửa quy cách bao hoặc tên"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50"
+                        title="Xóa loại này"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

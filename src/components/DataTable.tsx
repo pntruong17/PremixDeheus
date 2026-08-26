@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { PremixHandoverRow, PremixItem } from '../types';
-import { Plus, Trash2, RotateCcw, CheckCircle2, AlertTriangle, Sparkles, FileEdit, PackagePlus, Sliders, Check, Zap, Info, FileText, Layers, CloudDownload, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, CheckCircle2, AlertTriangle, Sparkles, FileEdit, PackagePlus, Sliders, Check, Zap, Info, FileText, Layers, CloudDownload, RefreshCw, Search } from 'lucide-react';
 import { recalculateRow, getPremixBagSize } from '../lib/storage';
 
 interface DataTableProps {
@@ -39,14 +39,40 @@ export const DataTable: React.FC<DataTableProps> = ({
   const [isCalibratingStock, setIsCalibratingStock] = useState(false);
   const [calibrationMap, setCalibrationMap] = useState<{ [code: string]: number }>({});
   const [selectedPageFilter, setSelectedPageFilter] = useState<number | 'all'>('all');
+  const [calibrationPageFilter, setCalibrationPageFilter] = useState<number | 'all'>('all');
+  const [calibrationSearch, setCalibrationSearch] = useState('');
 
   const handleOpenCalibration = () => {
     const currentMap: { [code: string]: number } = {};
-    rows.forEach((r) => {
-      currentMap[r.code] = r.openingStock || 0;
+    // Nạp đầy đủ 100% tất cả các loại trong catalog (kể cả loại chưa có trong rows)
+    premixCatalog.forEach((item) => {
+      const row = rows.find(
+        (r) =>
+          (r.code && r.code.trim().toLowerCase() === item.code.trim().toLowerCase()) ||
+          (r.name && r.name.trim().toLowerCase() === item.name.trim().toLowerCase())
+      );
+      currentMap[item.code] = row ? (row.openingStock || 0) : (item.defaultOpeningStock || 0);
     });
     setCalibrationMap(currentMap);
+    setCalibrationSearch('');
+    setCalibrationPageFilter('all');
     setIsCalibratingStock(true);
+  };
+
+  const handleResetCalibrationToDefault = () => {
+    const resetMap: { [code: string]: number } = {};
+    premixCatalog.forEach((item) => {
+      resetMap[item.code] = item.defaultOpeningStock || 0;
+    });
+    setCalibrationMap(resetMap);
+  };
+
+  const handleSetAllCalibrationToZero = () => {
+    const zeroMap: { [code: string]: number } = {};
+    premixCatalog.forEach((item) => {
+      zeroMap[item.code] = 0;
+    });
+    setCalibrationMap(zeroMap);
   };
 
   const handleSaveCalibration = () => {
@@ -115,18 +141,10 @@ export const DataTable: React.FC<DataTableProps> = ({
       {/* Header Toolbar */}
       <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-slate-50/70">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
-              <FileEdit className="w-5 h-5 text-blue-600" />
-              Bảng Bàn Giao Theo Thứ Tự 4 Trang Giấy Báo Cáo
-            </h3>
-            <span className="text-[11px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
-              Đúng thứ tự 43 nguyên liệu từ trên xuống dưới
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Được sắp xếp chuẩn theo 4 trang biểu mẫu giấy để người làm báo cáo dễ dàng chép lại trực tiếp!
-          </p>
+          <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+            <FileEdit className="w-5 h-5 text-blue-600" />
+            Báo cáo hàng ngày
+          </h3>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
@@ -237,31 +255,54 @@ export const DataTable: React.FC<DataTableProps> = ({
         </div>
       </div>
 
-      {/* Modal / Khung Hiệu chỉnh Tồn Đầu */}
+      {/* Khung Hiệu chỉnh Tồn Đầu Toàn Diện 43 Loại */}
       {isCalibratingStock && (
-        <div className="p-4 sm:p-5 bg-purple-50/70 border-b-2 border-purple-200 animate-fadeIn">
-          <div className="flex items-center justify-between mb-3">
+        <div className="p-4 sm:p-5 bg-purple-50/90 border-b-2 border-purple-300 animate-fadeIn space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
               <h4 className="text-sm font-bold text-purple-950 flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-purple-600" />
-                Hiệu Chỉnh Khối Lượng Tồn Đầu (KG) Cho Từng Nguyên Liệu
+                Hiệu Chỉnh Tồn Đầu (KG) - Đầy Đủ {premixCatalog.length} Loại Theo Biểu Mẫu De Heus
               </h4>
               <p className="text-xs text-purple-700">
                 Nhập số kg tồn đầu thực tế đo đếm được tại kho/xưởng trước khi bắt đầu ca
               </p>
             </div>
-            <div className="flex gap-2">
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleResetCalibrationToDefault}
+                className="px-2.5 py-1 bg-white hover:bg-purple-100 text-purple-800 border border-purple-300 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
+                title="Lấy lại số tồn đầu ban đầu mẫu của De Heus"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-purple-600" />
+                Mặc định De Heus
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSetAllCalibrationToZero}
+                className="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
+                title="Đặt toàn bộ 43 loại về 0 kg"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                Đặt tất cả về 0
+              </button>
+
+              <div className="w-px h-5 bg-purple-200 hidden sm:block" />
+
               <button
                 type="button"
                 onClick={() => setIsCalibratingStock(false)}
-                className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-semibold"
+                className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-semibold transition-colors"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={handleSaveCalibration}
-                className="px-4 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-bold flex items-center gap-1 shadow-sm"
+                className="px-4 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all"
               >
                 <Check className="w-3.5 h-3.5" />
                 Áp Dụng Tồn Đầu
@@ -269,29 +310,111 @@ export const DataTable: React.FC<DataTableProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 max-h-56 overflow-y-auto p-1">
-            {rows.map((r) => (
-              <div key={r.id} className="bg-white p-2 rounded-lg border border-purple-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-purple-800 block truncate" title={r.name}>
-                  [Trang {r.pageNumber || 1}] {r.name}
-                </span>
-                <div className="flex items-center gap-1 mt-1">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={calibrationMap[r.code] !== undefined ? calibrationMap[r.code] : r.openingStock}
-                    onChange={(e) =>
-                      setCalibrationMap({
-                        ...calibrationMap,
-                        [r.code]: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full text-right bg-purple-50/50 border border-purple-300 rounded px-1.5 py-0.5 text-xs font-mono font-bold text-purple-900 focus:outline-none focus:bg-white"
-                  />
-                  <span className="text-[10px] text-slate-400">kg</span>
-                </div>
-              </div>
-            ))}
+          {/* Bộ lọc trang & Ô tìm kiếm trong modal */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-purple-200/60">
+            <div className="flex flex-wrap gap-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setCalibrationPageFilter('all')}
+                className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                  calibrationPageFilter === 'all'
+                    ? 'bg-purple-700 text-white shadow-xs'
+                    : 'bg-white text-purple-900 border border-purple-200 hover:bg-purple-100'
+                }`}
+              >
+                Tất cả ({premixCatalog.length})
+              </button>
+              {[1, 2, 3, 4].map((p) => {
+                const count = premixCatalog.filter((item) => item.pageNumber === p).length;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setCalibrationPageFilter(p)}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                      calibrationPageFilter === p
+                        ? 'bg-purple-700 text-white shadow-xs'
+                        : 'bg-white text-purple-900 border border-purple-200 hover:bg-purple-100'
+                    }`}
+                  >
+                    Trang {p} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-purple-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tìm mã code hoặc tên..."
+                value={calibrationSearch}
+                onChange={(e) => setCalibrationSearch(e.target.value)}
+                className="w-full pl-8 pr-2.5 py-1 bg-white border border-purple-200 rounded text-xs text-purple-950 placeholder-purple-300 focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Danh sách 43 loại hiển thị trực quan */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 max-h-72 overflow-y-auto p-1 bg-purple-100/40 rounded-xl border border-purple-200/80">
+            {premixCatalog
+              .filter((item) => {
+                const matchesPage = calibrationPageFilter === 'all' || item.pageNumber === calibrationPageFilter;
+                const matchesSearch =
+                  !calibrationSearch ||
+                  item.name.toLowerCase().includes(calibrationSearch.toLowerCase()) ||
+                  item.code.toLowerCase().includes(calibrationSearch.toLowerCase());
+                return matchesPage && matchesSearch;
+              })
+              .map((item) => {
+                const currentVal =
+                  calibrationMap[item.code] !== undefined
+                    ? calibrationMap[item.code]
+                    : (item.defaultOpeningStock || 0);
+                const hasStock = currentVal > 0;
+
+                return (
+                  <div
+                    key={item.id || item.code}
+                    className={`p-2 rounded-lg border transition-all ${
+                      hasStock
+                        ? 'bg-white border-purple-300 shadow-xs ring-1 ring-purple-200'
+                        : 'bg-white/80 border-purple-100 text-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[10px] mb-0.5">
+                      <span className="font-mono font-bold text-purple-700">{item.code}</span>
+                      <span className="text-[9px] px-1 py-0.2 bg-purple-50 text-purple-600 rounded font-semibold">
+                        T{item.pageNumber} • {item.bagPackagingKg || 25}kg
+                      </span>
+                    </div>
+
+                    <span className="text-[11px] font-bold text-slate-800 block truncate" title={item.name}>
+                      {item.name}
+                    </span>
+
+                    <div className="flex items-center gap-1 mt-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={currentVal}
+                        onChange={(e) =>
+                          setCalibrationMap({
+                            ...calibrationMap,
+                            [item.code]: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className={`w-full text-right border rounded px-1.5 py-0.5 text-xs font-mono font-bold focus:outline-none focus:bg-white ${
+                          hasStock
+                            ? 'bg-purple-50/70 border-purple-300 text-purple-950 font-black'
+                            : 'bg-slate-50 border-slate-200 text-slate-400'
+                        }`}
+                      />
+                      <span className="text-[10px] text-slate-400 font-medium">kg</span>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}

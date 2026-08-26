@@ -11,6 +11,7 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { HandoverModal } from '@/components/HandoverModal';
 import { AdminAuthModal } from '@/components/AdminAuthModal';
 import { OperatorManageModal } from '@/components/OperatorManageModal';
+import { CheckCircle2, FileSpreadsheet, X, Sparkles, ArrowRight } from 'lucide-react';
 import { PremixItem, PremixHandoverRow, ShiftInfo, HandoverReport, AppSettings } from '@/types';
 import {
   getStoredCatalog,
@@ -58,6 +59,14 @@ export default function Home() {
   const [history, setHistory] = useState<HandoverReport[]>([]);
   const [settings, setSettings] = useState<AppSettings>(getStoredSettings());
   const [operatorsList, setOperatorsList] = useState<string[]>(DEFAULT_OPERATORS_LIST);
+  const [handoverSuccessBanner, setHandoverSuccessBanner] = useState<{
+    prevShiftNumber: string;
+    prevDate: string;
+    newShiftNumber: string;
+    newDate: string;
+    totalClosingStock: number;
+    prevReport: HandoverReport;
+  } | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -346,13 +355,27 @@ export default function Home() {
 
   // Nộp báo cáo và bàn giao sang ca tiếp theo
   const handleConfirmHandover = (nextShiftInfo: ShiftInfo, nextRows: PremixHandoverRow[]) => {
-    saveReportToHistory(currentReport);
+    const reportSnapshot: HandoverReport = {
+      ...currentReport,
+      rows: [...rows],
+      updatedAt: new Date().toISOString(),
+    };
+    saveReportToHistory(reportSnapshot);
     setHistory(getStoredHistory());
 
     setShiftInfo(nextShiftInfo);
     setRows(nextRows);
     saveShiftInfo(nextShiftInfo);
     saveCurrentRows(nextRows);
+
+    setHandoverSuccessBanner({
+      prevShiftNumber: reportSnapshot.shiftInfo.shiftNumber,
+      prevDate: reportSnapshot.shiftInfo.date,
+      newShiftNumber: nextShiftInfo.shiftNumber,
+      newDate: nextShiftInfo.date,
+      totalClosingStock: reportSnapshot.totalClosingStockKg,
+      prevReport: reportSnapshot,
+    });
 
     setActiveTab('scanner');
   };
@@ -623,10 +646,57 @@ export default function Home() {
       />
 
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Banner thông báo Bàn Giao Ca Thành Công */}
+        {handoverSuccessBanner && (
+          <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white shadow-xl border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-400/30 shrink-0 mt-0.5">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="bg-emerald-500/30 text-emerald-300 text-xs font-black px-2 py-0.5 rounded border border-emerald-500/40">
+                    BÀN GIAO THÀNH CÔNG
+                  </span>
+                  <h4 className="text-sm font-bold">
+                    Ca {handoverSuccessBanner.prevShiftNumber} ({handoverSuccessBanner.prevDate}) $\rightarrow$ Ca {handoverSuccessBanner.newShiftNumber} ({handoverSuccessBanner.newDate})
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-300">
+                  ✓ Toàn bộ <strong>{handoverSuccessBanner.totalClosingStock.toFixed(2)} kg</strong> tồn cuối của Ca {handoverSuccessBanner.prevShiftNumber} đã được nối thành <strong>Tồn đầu cho Ca {handoverSuccessBanner.newShiftNumber}</strong>. Bảng số liệu đã được làm mới sạch sẽ để bắt đầu cân ca mới!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  handleLoadReportFromHistory(handoverSuccessBanner.prevReport);
+                  setHandoverSuccessBanner(null);
+                }}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/30 transition-all flex items-center gap-1.5 active:scale-95"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Xem lại / In Ca {handoverSuccessBanner.prevShiftNumber}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setHandoverSuccessBanner(null)}
+                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                title="Đóng thông báo"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tab 1: Quét Ảnh 2 Cân & Nhập Phiếu */}
         {activeTab === 'scanner' && (
           <div className="space-y-6">
             <ImageScanner
+              key={`${shiftInfo.date}-Ca${shiftInfo.shiftNumber}`}
               premixCatalog={catalog}
               currentRows={rows}
               customApiKey={settings.geminiApiKey}

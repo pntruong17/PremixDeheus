@@ -1,0 +1,568 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Header } from '@/components/Header';
+import { ImageScanner } from '@/components/ImageScanner';
+import { DataTable } from '@/components/DataTable';
+import { SummaryReport } from '@/components/SummaryReport';
+import { PremixCatalog } from '@/components/PremixCatalog';
+import { HistoryView } from '@/components/HistoryView';
+import { SettingsModal } from '@/components/SettingsModal';
+import { HandoverModal } from '@/components/HandoverModal';
+import { PremixItem, PremixHandoverRow, ShiftInfo, HandoverReport, AppSettings } from '@/types';
+import {
+  getStoredCatalog,
+  saveCatalog,
+  getStoredCurrentRows,
+  saveCurrentRows,
+  getStoredShiftInfo,
+  saveShiftInfo,
+  getStoredHistory,
+  saveReportToHistory,
+  deleteReportFromHistory,
+  getStoredSettings,
+  saveSettings,
+  calculateReportTotals,
+  recalculateRow,
+  matchPremixFromCatalog,
+  formatTowerExpression,
+  getStoredAutoReceipt,
+  saveAutoReceipt,
+  prepareNextShiftData,
+  getLastSubmittedReport,
+} from '@/lib/storage';
+import { createInitialHandoverRows } from '@/lib/defaultPremixData';
+import { fetchLatestStocksFromGoogleSheet } from '@/lib/googleSheet';
+
+export default function Home() {
+  const [isClient, setIsClient] = useState(false);
+  const [activeTab, setActiveTab] = useState('scanner');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHandoverOpen, setIsHandoverOpen] = useState(false);
+  const [autoReceipt, setAutoReceipt] = useState(true);
+  const [isFetchingSheet, setIsFetchingSheet] = useState(false);
+
+  const [catalog, setCatalog] = useState<PremixItem[]>([]);
+  const [rows, setRows] = useState<PremixHandoverRow[]>([]);
+  const [shiftInfo, setShiftInfo] = useState<ShiftInfo>(getStoredShiftInfo());
+  const [history, setHistory] = useState<HandoverReport[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(getStoredSettings());
+
+  useEffect(() => {
+    setIsClient(true);
+    setCatalog(getStoredCatalog());
+    setRows(getStoredCurrentRows());
+    setShiftInfo(getStoredShiftInfo());
+    setHistory(getStoredHistory());
+    setSettings(getStoredSettings());
+    setAutoReceipt(getStoredAutoReceipt());
+  }, []);
+
+  const totals = calculateReportTotals(rows);
+
+  const currentReport: HandoverReport = {
+    id: `report-${(shiftInfo.date || 'today').replace(/[\/\-]/g, '')}-Ca${shiftInfo.shiftNumber}`,
+    shiftInfo,
+    rows,
+    totalOpeningStockKg: totals.totalOpeningStockKg,
+    totalReceivedKg: totals.totalReceivedKg,
+    totalTheoryUsedKg: totals.totalTheoryUsedKg,
+    totalActualUsedKg: totals.totalActualUsedKg,
+    totalClosingStockKg: totals.totalClosingStockKg,
+    totalDiffKg: totals.totalDiffKg,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const nextShiftPreview = prepareNextShiftData(currentReport, catalog);
+
+  const handleShiftInfoChange = (newInfo: ShiftInfo) => {
+    setShiftInfo(newInfo);
+    saveShiftInfo(newInfo);
+  };
+
+  const handleUpdateCatalog = (newCatalog: PremixItem[]) => {
+    setCatalog(newCatalog);
+    saveCatalog(newCatalog);
+  };
+
+  const handleSaveSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    saveSettings(newSettings);
+  };
+
+  const handleToggleAutoReceipt = (enabled: boolean) => {
+    setAutoReceipt(enabled);
+    saveAutoReceipt(enabled);
+    if (enabled) {
+      const updated = rows.map((r) => recalculateRow(r, 0.5, true, catalog));
+      setRows(updated);
+      saveCurrentRows(updated);
+    }
+  };
+
+  const handleRecalculateAllReceipts = () => {
+    const updated = rows.map((r) => recalculateRow(r, 0.5, true, catalog));
+    setRows(updated);
+    saveCurrentRows(updated);
+  };
+
+  const handleUpdateRow = (id: string, updatedRow: PremixHandoverRow) => {
+    const updated = rows.map((r) => (r.id === id ? updatedRow : r));
+    setRows(updated);
+    saveCurrentRows(updated);
+  };
+
+  const handleDeleteRow = (id: string) => {
+    const updated = rows.filter((r) => r.id !== id);
+    setRows(updated);
+    saveCurrentRows(updated);
+  };
+
+  const handleAddRow = () => {
+    const newRow: PremixHandoverRow = {
+      id: `row-${Date.now()}`,
+      code: '',
+      name: '',
+      openingStock: 0,
+      receivedQty: 0,
+      theoryExpression: '',
+      theoryTotal: 0,
+      actualExpression: '',
+      actualTotal: 0,
+      closingStock: 0,
+      lotNumber: '',
+      diff: 0,
+      diffPercent: 0,
+      isWithinTolerance: true,
+      pageNumber: 1,
+    };
+    const updated = [...rows, newRow];
+    setRows(updated);
+    saveCurrentRows(updated);
+  };
+
+  const handleResetToDefaultList = () => {
+    const initial = createInitialHandoverRows(catalog);
+    setRows(initial);
+    saveCurrentRows(initial);
+  };
+
+  const handleBulkUpdateOpeningStock = (stockMap: { [code: string]: number }) => {
+    const updated = rows.map((r) => {
+      if (stockMap[r.code] !== undefined) {
+        return recalculateRow(
+          { ...r, openingStock: stockMap[r.code] },
+          0.5,
+          autoReceipt,
+          catalog
+        );
+      }
+      return r;
+    });
+    setRows(updated);
+    saveCurrentRows(updated);
+  };
+
+  // Đồng bộ nạp Tồn đầu từ Google Sheet (Tự động fallback server default nếu trống)
+  const handleFetchGoogleSheetStocks = async () => {
+    setIsFetchingSheet(true);
+    try {
+      const res = await fetchLatestStocksFromGoogleSheet(settings.googleSheetUrl);
+      if (res.success && res.stocks && res.stocks.length > 0) {
+        const stockMap: { [code: string]: { stock: number; lot: string; shift: string; date: string } } = {};
+        res.stocks.forEach((s) => {
+          stockMap[s.code] = {
+            stock: s.closingStock,
+            lot: s.lotNumber,
+            shift: s.lastShift,
+            date: s.lastDate,
+          };
+        });
+
+        const updated = rows.map((r) => {
+          const matched = stockMap[r.code];
+          if (matched !== undefined) {
+            return recalculateRow(
+              {
+                ...r,
+                openingStock: matched.stock,
+                lotNumber: matched.lot || r.lotNumber,
+              },
+              0.5,
+              autoReceipt,
+              catalog
+            );
+          }
+          return r;
+        });
+
+        setRows(updated);
+        saveCurrentRows(updated);
+
+        const sample = res.stocks[0];
+        alert(`Đã tải và nạp thành công Tồn đầu của ${res.stocks.length} nguyên liệu từ Google Sheet (Chốt từ ${sample.lastShift} ngày ${sample.lastDate})!`);
+      } else {
+        alert(res.message || 'Chưa có dữ liệu tồn kho trên Google Sheet hoặc chưa cấu hình URL trong Cài đặt.');
+      }
+    } catch (e: any) {
+      alert(`Lỗi đồng bộ Google Sheet: ${e.message}`);
+    } finally {
+      setIsFetchingSheet(false);
+    }
+  };
+
+  // Nộp báo cáo và bàn giao sang ca tiếp theo
+  const handleConfirmHandover = (nextShiftInfo: ShiftInfo, nextRows: PremixHandoverRow[]) => {
+    saveReportToHistory(currentReport);
+    setHistory(getStoredHistory());
+
+    setShiftInfo(nextShiftInfo);
+    setRows(nextRows);
+    saveShiftInfo(nextShiftInfo);
+    saveCurrentRows(nextRows);
+
+    setActiveTab('scanner');
+  };
+
+  // Gộp số liệu từ 2 Tháp Cân (Cân Tôm & Cân Cá) và tự động tính SL nhận kho
+  const handleUpdateFromDualScales = (
+    shrimpRecords?: any[],
+    fishRecords?: any[],
+    shiftInfoDetected?: any
+  ) => {
+    let currentRowsCopy = [...rows];
+
+    if (shiftInfoDetected) {
+      const newShift = { ...shiftInfo };
+      if (shiftInfoDetected.date) newShift.date = shiftInfoDetected.date;
+      if (shiftInfoDetected.timeRange) newShift.timeRange = shiftInfoDetected.timeRange;
+      if (shiftInfoDetected.shiftNumber) newShift.shiftNumber = shiftInfoDetected.shiftNumber;
+      if (shiftInfoDetected.operatorName) newShift.operatorName = shiftInfoDetected.operatorName;
+      setShiftInfo(newShift);
+      saveShiftInfo(newShift);
+    }
+
+    const mergedMap: {
+      [key: string]: {
+        shrimpTheory?: number;
+        shrimpActual?: number;
+        fishTheory?: number;
+        fishActual?: number;
+        rawName: string;
+      };
+    } = {};
+
+    if (shrimpRecords) {
+      shrimpRecords.forEach((item) => {
+        const matched = matchPremixFromCatalog(item.premixName || item.code || '', catalog);
+        const key = matched?.code || item.code || item.premixName;
+        if (!mergedMap[key]) {
+          mergedMap[key] = { rawName: matched?.name || item.premixName };
+        }
+        mergedMap[key].shrimpTheory = item.theoryWeight || 0;
+        mergedMap[key].shrimpActual = item.actualWeight || 0;
+      });
+    }
+
+    if (fishRecords) {
+      fishRecords.forEach((item) => {
+        const matched = matchPremixFromCatalog(item.premixName || item.code || '', catalog);
+        const key = matched?.code || item.code || item.premixName;
+        if (!mergedMap[key]) {
+          mergedMap[key] = { rawName: matched?.name || item.premixName };
+        }
+        mergedMap[key].fishTheory = item.theoryWeight || 0;
+        mergedMap[key].fishActual = item.actualWeight || 0;
+      });
+    }
+
+    for (const key in mergedMap) {
+      const data = mergedMap[key];
+      const matched = matchPremixFromCatalog(key, catalog);
+      const codeToFind = matched?.code || key;
+      const nameToFind = matched?.name || data.rawName;
+
+      const existingIndex = currentRowsCopy.findIndex(
+        (r) => (codeToFind && r.code === codeToFind) || (nameToFind && r.name.toLowerCase() === nameToFind.toLowerCase())
+      );
+
+      const theoryFormatted = formatTowerExpression(data.shrimpTheory, data.fishTheory);
+      const actualFormatted = formatTowerExpression(data.shrimpActual, data.fishActual);
+
+      if (existingIndex >= 0) {
+        const row = currentRowsCopy[existingIndex];
+        const updatedRow = recalculateRow(
+          {
+            ...row,
+            shrimpTheory: data.shrimpTheory,
+            shrimpActual: data.shrimpActual,
+            fishTheory: data.fishTheory,
+            fishActual: data.fishActual,
+            theoryExpression: theoryFormatted.expression || row.theoryExpression,
+            actualExpression: actualFormatted.expression || row.actualExpression,
+          },
+          0.5,
+          autoReceipt,
+          catalog
+        );
+        currentRowsCopy[existingIndex] = updatedRow;
+      } else {
+        const newRow = recalculateRow(
+          {
+            id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            code: codeToFind,
+            name: nameToFind,
+            openingStock: matched?.defaultOpeningStock || 0,
+            receivedQty: 0,
+            shrimpTheory: data.shrimpTheory,
+            shrimpActual: data.shrimpActual,
+            fishTheory: data.fishTheory,
+            fishActual: data.fishActual,
+            theoryExpression: theoryFormatted.expression,
+            theoryTotal: theoryFormatted.total,
+            actualExpression: actualFormatted.expression,
+            actualTotal: actualFormatted.total,
+            closingStock: 0,
+            lotNumber: matched?.defaultLotNumber || '',
+            diff: 0,
+            diffPercent: 0,
+            isWithinTolerance: true,
+            pageNumber: matched?.pageNumber || 1,
+          },
+          0.5,
+          autoReceipt,
+          catalog
+        );
+        currentRowsCopy.push(newRow);
+      }
+    }
+
+    setRows(currentRowsCopy);
+    saveCurrentRows(currentRowsCopy);
+  };
+
+  const handleLoadExampleFromPhoto = () => {
+    setShiftInfo({
+      date: '26/08/2026',
+      timeRange: '07h30 -> 15h30',
+      shiftNumber: '1',
+      operatorName: 'N. Tường',
+      sectionCode: '03F26',
+      revision: '01',
+      formDate: '23/12/2025',
+      companyName: 'De Heus',
+      notes: 'Bàn giao ca 1',
+    });
+    saveShiftInfo({
+      date: '26/08/2026',
+      timeRange: '07h30 -> 15h30',
+      shiftNumber: '1',
+      operatorName: 'N. Tường',
+      sectionCode: '03F26',
+      revision: '01',
+      formDate: '23/12/2025',
+      companyName: 'De Heus',
+      notes: 'Bàn giao ca 1',
+    });
+
+    const initialRows = createInitialHandoverRows(catalog);
+    const updated = initialRows.map(r => {
+      if (r.code === '1404060') {
+        return recalculateRow({
+          ...r,
+          openingStock: 2.99,
+          receivedQty: 40,
+          shrimpTheory: 8,
+          fishTheory: 16,
+          shrimpActual: 8.01,
+          fishActual: 15.99,
+          theoryExpression: '8 + 16',
+          actualExpression: '8.01 + 15.99',
+          lotNumber: '030526 PO 82975 PO 260202',
+        }, 0.5, true, catalog);
+      }
+      if (r.code === '2303010') {
+        return recalculateRow({
+          ...r,
+          openingStock: 19.86,
+          receivedQty: 150,
+          theoryExpression: '126.4',
+          actualExpression: '126.39',
+          lotNumber: '030826 PO 83770 RM02',
+        }, 0.5, true, catalog);
+      }
+      if (r.code === '2404010') {
+        return recalculateRow({
+          ...r,
+          openingStock: 763.2,
+          theoryExpression: '22 + 16',
+          actualExpression: '22.02 + 15.98',
+          lotNumber: '120826 PO 1400 SR26F00213',
+        }, 0.5, true, catalog);
+      }
+      if (r.code === '3015020') {
+        return recalculateRow({
+          ...r,
+          openingStock: 8.39,
+          receivedQty: 100,
+          theoryExpression: '84 + 12.32',
+          actualExpression: '83.96 + 12.3',
+          lotNumber: '230626 PO 1019611260110',
+        }, 0.5, true, catalog);
+      }
+      if (r.code === '3016010') {
+        return recalculateRow({
+          ...r,
+          openingStock: 17.16,
+          receivedQty: 25,
+          theoryExpression: '16 + 25.6',
+          actualExpression: '16.02 + 25.58',
+          lotNumber: '030826 PO 83770 PO 112026041707',
+        }, 0.5, true, catalog);
+      }
+      return r;
+    });
+
+    setRows(updated);
+    saveCurrentRows(updated);
+  };
+
+  const handleSaveToHistory = (report: HandoverReport) => {
+    saveReportToHistory(report);
+    setHistory(getStoredHistory());
+  };
+
+  const handleLoadReportFromHistory = (report: HandoverReport) => {
+    setShiftInfo(report.shiftInfo);
+    setRows(report.rows);
+    saveShiftInfo(report.shiftInfo);
+    saveCurrentRows(report.rows);
+    setActiveTab('report');
+  };
+
+  const handleDeleteHistory = (id: string) => {
+    deleteReportFromHistory(id);
+    setHistory(getStoredHistory());
+  };
+
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-semibold tracking-wider">ĐANG TẢI ỨNG DỤNG BÀN GIAO PREMIX DE HEUS...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+      <Header
+        shiftInfo={shiftInfo}
+        onShiftInfoChange={handleShiftInfoChange}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenHandover={() => setIsHandoverOpen(true)}
+        settings={settings}
+        totalActualUsedKg={totals.totalActualUsedKg}
+        totalTheoryUsedKg={totals.totalTheoryUsedKg}
+        totalClosingStockKg={totals.totalClosingStockKg}
+        activeRowCount={totals.activeRowCount}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
+
+      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Tab 1: Quét Ảnh 2 Cân & Nhập Phiếu */}
+        {activeTab === 'scanner' && (
+          <div className="space-y-6">
+            <ImageScanner
+              premixCatalog={catalog}
+              currentRows={rows}
+              customApiKey={settings.geminiApiKey}
+              onUpdateFromDualScales={handleUpdateFromDualScales}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+            />
+
+            <DataTable
+              rows={rows}
+              premixCatalog={catalog}
+              autoReceipt={autoReceipt}
+              onToggleAutoReceipt={handleToggleAutoReceipt}
+              onUpdateRow={handleUpdateRow}
+              onDeleteRow={handleDeleteRow}
+              onAddRow={handleAddRow}
+              onResetToDefaultList={handleResetToDefaultList}
+              onLoadExampleFromPhoto={handleLoadExampleFromPhoto}
+              onBulkUpdateOpeningStock={handleBulkUpdateOpeningStock}
+              onRecalculateAllReceipts={handleRecalculateAllReceipts}
+              onFetchGoogleSheetStocks={handleFetchGoogleSheetStocks}
+              isFetchingSheet={isFetchingSheet}
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsHandoverOpen(true)}
+                className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 active:scale-95"
+              >
+                <span>🔒 Nộp Báo Cáo & Bàn Giao Ca {shiftInfo.shiftNumber} Sang Ca {nextShiftPreview.nextShiftInfo.shiftNumber}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('report')}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-blue-600/30 flex items-center gap-2 transition-all active:scale-95"
+              >
+                Xem Mẫu Báo Cáo De Heus & Xuất Excel $\rightarrow$
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Mẫu Báo Cáo De Heus & Xuất Excel */}
+        {activeTab === 'report' && (
+          <SummaryReport
+            report={currentReport}
+            onSaveToHistory={handleSaveToHistory}
+          />
+        )}
+
+        {/* Tab 3: Danh Mục 43 Loại & Quy Cách Bao */}
+        {activeTab === 'catalog' && (
+          <PremixCatalog
+            catalog={catalog}
+            onUpdateCatalog={handleUpdateCatalog}
+          />
+        )}
+
+        {/* Tab 4: Lịch Sử Báo Cáo Ca */}
+        {activeTab === 'history' && (
+          <HistoryView
+            history={history}
+            onLoadReport={handleLoadReportFromHistory}
+            onDeleteReport={handleDeleteHistory}
+          />
+        )}
+      </div>
+
+      <HandoverModal
+        isOpen={isHandoverOpen}
+        onClose={() => setIsHandoverOpen(false)}
+        currentReport={currentReport}
+        onConfirmHandover={handleConfirmHandover}
+        onSaveHistoryOnly={handleSaveToHistory}
+        nextShiftData={nextShiftPreview}
+        googleSheetUrl={settings.googleSheetUrl}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onSaveSettings={handleSaveSettings}
+      />
+    </main>
+  );
+}

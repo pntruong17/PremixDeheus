@@ -23,7 +23,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const expected = (correctPin || '6322').trim();
+    const expected = (correctPin || '20000').trim();
     if (pinInput.trim() === expected) {
       setErrorMsg('');
       setPinInput('');
@@ -62,7 +62,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
               <KeyRound className="w-3.5 h-3.5 text-blue-600" />
-              Nhập Mã PIN Quản Trị Viên (Admin PIN)
+              Nhập Mã PIN Quản Trị Viên
             </label>
             <input
               type="password"
@@ -72,11 +72,11 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                 setPinInput(e.target.value);
                 setErrorMsg('');
               }}
-              placeholder="Nhập mã PIN (Mặc định: 6322)"
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-center text-base tracking-widest font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
+              placeholder="•••••"
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-center text-lg tracking-widest font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
             />
             <p className="text-[11px] text-slate-400 mt-1.5 text-center">
-              💡 Mã PIN mặc định là <strong className="text-blue-600 font-mono">6322</strong> (có thể đổi trong Cài đặt).
+              Mã PIN bảo mật chỉ dành cho người quản trị.
             </p>
           </div>
 

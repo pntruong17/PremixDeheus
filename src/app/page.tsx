@@ -81,7 +81,7 @@ export default function Home() {
     const urlParams = new URLSearchParams(window.location.search);
     const hasAdminParam = urlParams.get('admin') === 'true' || urlParams.get('admin') === '1';
     const pinParam = urlParams.get('pin');
-    const isParamAdmin = hasAdminParam || (pinParam && pinParam === (storedSettings.adminPin || '6322'));
+    const isParamAdmin = hasAdminParam || (pinParam && pinParam === (storedSettings.adminPin || '20000'));
     const effectiveAdmin = storedIsAdmin || Boolean(isParamAdmin);
 
     setIsAdmin(effectiveAdmin);
@@ -789,7 +789,7 @@ export default function Home() {
       <AdminAuthModal
         isOpen={isAdminAuthOpen}
         onClose={() => setIsAdminAuthOpen(false)}
-        correctPin={settings.adminPin || '6322'}
+        correctPin={settings.adminPin || '20000'}
         onSuccess={() => {
           setIsAdmin(true);
           saveStoredIsAdmin(true);

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { AppSettings } from '../types';
-import { X, Key, Building2, User, Sliders, ExternalLink, Check, Sparkles, AlertCircle, FileSpreadsheet, Copy, CheckCircle2, Users, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { X, Key, Building2, User, Sliders, ExternalLink, Check, Sparkles, AlertCircle, FileSpreadsheet, Copy, CheckCircle2, Users, Plus, Trash2, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../lib/googleSheet';
 import { DEFAULT_OPERATORS_LIST } from '../lib/storage';
 
@@ -21,6 +21,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<AppSettings>(settings);
   const [newOpInput, setNewOpInput] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
   
@@ -424,16 +425,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
               🔒 Mã PIN Bảo Vệ Quản Trị Viên (Admin PIN)
             </label>
-            <div className="flex gap-2 items-center">
-              <input
-                type="text"
-                value={formData.adminPin || '6322'}
-                onChange={(e) => setFormData({ ...formData, adminPin: e.target.value.trim() })}
-                placeholder="6322"
-                className="w-48 px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative w-48">
+                <input
+                  type={showPin ? 'text' : 'password'}
+                  value={formData.adminPin || '20000'}
+                  onChange={(e) => setFormData({ ...formData, adminPin: e.target.value.trim() })}
+                  placeholder="•••••"
+                  className="w-full pl-3 pr-8 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  title={showPin ? 'Ẩn mã PIN' : 'Hiện mã PIN'}
+                >
+                  {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
               <span className="text-[11px] text-amber-800">
-                (Dùng để mở khóa <strong>Cài đặt</strong> và <strong>Danh mục 43 loại</strong> cho riêng bạn)
+                (Mã bí mật dùng để mở khóa quyền Quản trị viên)
               </span>
             </div>
           </div>

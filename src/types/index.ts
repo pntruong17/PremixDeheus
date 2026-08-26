@@ -77,7 +77,7 @@ export interface AppSettings {
   defaultSection: string;
   defaultRevision: string;
   defaultTolerancePercent: number;
-  adminPin?: string; // Mã PIN bảo vệ mục Cấu hình & Danh mục (Mặc định: 6322)
+  adminPin?: string; // Mã PIN bảo mật quản trị viên
   operatorsList?: string[]; // Danh sách người làm báo cáo / nhân viên cân
   googleSheetUrl?: string; // URL Google Apps Script Web App để đồng bộ Google Sheet
   autoSyncSheet?: boolean; // Tự động đồng bộ lên Google Sheet khi nộp ca

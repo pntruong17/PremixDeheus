@@ -32,7 +32,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultSection: '03F26',
   defaultRevision: '01',
   defaultTolerancePercent: 0.5,
-  adminPin: '6322',
+  adminPin: '20000',
   operatorsList: DEFAULT_OPERATORS_LIST,
 };
 
@@ -556,7 +556,11 @@ export function getStoredSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEYS.APP_SETTINGS);
     if (raw) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      if (parsed.adminPin === '6322') {
+        parsed.adminPin = '20000';
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (e) {
     console.error('Error reading settings:', e);

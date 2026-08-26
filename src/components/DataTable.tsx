@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { PremixHandoverRow, PremixItem } from '../types';
+import { PremixHandoverRow, PremixItem, SheetSyncInfo } from '../types';
 import { Plus, Trash2, RotateCcw, CheckCircle2, AlertTriangle, Sparkles, FileEdit, PackagePlus, Sliders, Check, Zap, Info, FileText, Layers, CloudDownload, RefreshCw, Search } from 'lucide-react';
 import { recalculateRow, getPremixBagSize } from '../lib/storage';
 
@@ -19,6 +19,7 @@ interface DataTableProps {
   onRecalculateAllReceipts: () => void;
   onFetchGoogleSheetStocks?: () => void;
   isFetchingSheet?: boolean;
+  sheetSyncInfo?: SheetSyncInfo;
 }
 
 export const DataTable: React.FC<DataTableProps> = ({
@@ -35,6 +36,7 @@ export const DataTable: React.FC<DataTableProps> = ({
   onRecalculateAllReceipts,
   onFetchGoogleSheetStocks,
   isFetchingSheet = false,
+  sheetSyncInfo,
 }) => {
   const [isCalibratingStock, setIsCalibratingStock] = useState(false);
   const [calibrationMap, setCalibrationMap] = useState<{ [code: string]: number }>({});
@@ -145,16 +147,37 @@ export const DataTable: React.FC<DataTableProps> = ({
             <FileEdit className="w-5 h-5 text-blue-600" />
             Báo cáo hàng ngày
           </h3>
+          {/* Live Google Sheet Status Badge */}
+          {sheetSyncInfo && sheetSyncInfo.status === 'success' && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] text-emerald-700 font-semibold animate-fadeIn">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+              <span>
+                Google Sheet: Tồn đầu chốt từ <strong>{sheetSyncInfo.lastShift} ({sheetSyncInfo.lastDate})</strong> • {sheetSyncInfo.itemCount} mục (Lúc {sheetSyncInfo.lastSyncTime})
+              </span>
+            </div>
+          )}
+          {sheetSyncInfo && sheetSyncInfo.status === 'loading' && (
+            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-blue-600 font-semibold animate-fadeIn">
+              <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
+              <span>Đang tự động đồng bộ Tồn kho từ Google Sheet...</span>
+            </div>
+          )}
+          {sheetSyncInfo && sheetSyncInfo.status === 'error' && (
+            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-amber-700 font-medium animate-fadeIn">
+              <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+              <span>{sheetSyncInfo.message || 'Chưa đồng bộ Google Sheet (Đang dùng dữ liệu trên máy)'}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-          {/* Nút Đồng bộ Tồn đầu từ Google Sheet */}
+          {/* Nút Đồng bộ Tồn đầu từ Google Sheet (Giữ nguyên cho phép bấm thủ công bất kỳ lúc nào) */}
           {onFetchGoogleSheetStocks && (
             <button
               type="button"
               disabled={isFetchingSheet}
               onClick={onFetchGoogleSheetStocks}
-              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs"
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95"
               title="Lấy số liệu Tồn đầu mới nhất do ca trước vừa nộp lên Google Sheet"
             >
               {isFetchingSheet ? (

@@ -12,7 +12,7 @@ import { HandoverModal } from '@/components/HandoverModal';
 import { AdminAuthModal } from '@/components/AdminAuthModal';
 import { OperatorManageModal } from '@/components/OperatorManageModal';
 import { CheckCircle2, FileSpreadsheet, X, Sparkles, ArrowRight } from 'lucide-react';
-import { PremixItem, PremixHandoverRow, ShiftInfo, HandoverReport, AppSettings } from '@/types';
+import { PremixItem, PremixHandoverRow, ShiftInfo, HandoverReport, AppSettings, SheetSyncInfo } from '@/types';
 import {
   getStoredCatalog,
   saveCatalog,
@@ -59,6 +59,9 @@ export default function Home() {
   const [history, setHistory] = useState<HandoverReport[]>([]);
   const [settings, setSettings] = useState<AppSettings>(getStoredSettings());
   const [operatorsList, setOperatorsList] = useState<string[]>(DEFAULT_OPERATORS_LIST);
+  const [sheetSyncInfo, setSheetSyncInfo] = useState<SheetSyncInfo>({
+    status: 'idle',
+  });
   const [handoverSuccessBanner, setHandoverSuccessBanner] = useState<{
     prevShiftNumber: string;
     prevDate: string;
@@ -115,6 +118,9 @@ export default function Home() {
     setHistory(getStoredHistory());
     setSettings(getStoredSettings());
     setAutoReceipt(getStoredAutoReceipt());
+
+    // ⚡ CÁCH 2: TỰ ĐỘNG ĐỒNG BỘ TỒN ĐẦU TỪ GOOGLE SHEET NGAY KHI MỞ TRANG WEB
+    syncStocksFromSheet(false, storedCatalog, reorderedRows, storedSettings);
   }, []);
 
   const totals = calculateReportTotals(rows);
@@ -305,25 +311,53 @@ export default function Home() {
     saveCurrentRows(updated);
   };
 
-  // Đồng bộ nạp Tồn đầu từ Google Sheet (Tự động fallback server default nếu trống)
-  const handleFetchGoogleSheetStocks = async () => {
+  // Đồng bộ nạp Tồn đầu từ Google Sheet (Tự động chạy ngầm khi mở app hoặc bấm thủ công)
+  const syncStocksFromSheet = async (
+    isManual: boolean = false,
+    targetCatalog?: PremixItem[],
+    targetRows?: PremixHandoverRow[],
+    targetSettings?: AppSettings
+  ) => {
+    const activeCatalog = targetCatalog || catalog;
+    const activeRows = targetRows || rows;
+    const activeSettings = targetSettings || settings;
+
     setIsFetchingSheet(true);
+    setSheetSyncInfo((prev) => ({
+      ...prev,
+      status: 'loading',
+      message: 'Đang kết nối Google Sheet...',
+    }));
+
     try {
-      const res = await fetchLatestStocksFromGoogleSheet(settings.googleSheetUrl);
+      const res = await fetchLatestStocksFromGoogleSheet(activeSettings.googleSheetUrl);
       if (res.success && res.stocks && res.stocks.length > 0) {
         const stockMap: { [code: string]: { stock: number; lot: string; shift: string; date: string } } = {};
         res.stocks.forEach((s) => {
-          stockMap[s.code] = {
-            stock: s.closingStock,
-            lot: s.lotNumber,
-            shift: s.lastShift,
-            date: s.lastDate,
-          };
+          if (s.code) {
+            stockMap[String(s.code).trim().toLowerCase()] = {
+              stock: s.closingStock,
+              lot: s.lotNumber,
+              shift: s.lastShift,
+              date: s.lastDate,
+            };
+          }
+          if (s.name) {
+            stockMap[String(s.name).trim().toLowerCase()] = {
+              stock: s.closingStock,
+              lot: s.lotNumber,
+              shift: s.lastShift,
+              date: s.lastDate,
+            };
+          }
         });
 
-        const updated = rows.map((r) => {
-          const matched = stockMap[r.code];
-          if (matched !== undefined) {
+        const updated = activeRows.map((r) => {
+          const keyByCode = (r.code || '').trim().toLowerCase();
+          const keyByName = (r.name || '').trim().toLowerCase();
+          const matched = (keyByCode ? stockMap[keyByCode] : undefined) || (keyByName ? stockMap[keyByName] : undefined);
+
+          if (matched) {
             return recalculateRow(
               {
                 ...r,
@@ -332,7 +366,7 @@ export default function Home() {
               },
               0.5,
               autoReceipt,
-              catalog
+              activeCatalog
             );
           }
           return r;
@@ -342,15 +376,47 @@ export default function Home() {
         saveCurrentRows(updated);
 
         const sample = res.stocks[0];
-        alert(`Đã tải và nạp thành công Tồn đầu của ${res.stocks.length} nguyên liệu từ Google Sheet (Chốt từ ${sample.lastShift} ngày ${sample.lastDate})!`);
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        setSheetSyncInfo({
+          status: 'success',
+          lastShift: sample.lastShift || '',
+          lastDate: sample.lastDate || '',
+          itemCount: res.stocks.length,
+          lastSyncTime: timeStr,
+          message: `Đã đồng bộ Tồn đầu (${sample.lastShift} - ${sample.lastDate}) lúc ${timeStr}`,
+        });
+
+        if (isManual) {
+          alert(
+            `✓ Đã tải và nạp thành công Tồn đầu của ${res.stocks.length} nguyên liệu từ Google Sheet (Chốt từ ${sample.lastShift} ngày ${sample.lastDate})!`
+          );
+        }
       } else {
-        alert(res.message || 'Chưa có dữ liệu tồn kho trên Google Sheet hoặc chưa cấu hình URL trong Cài đặt.');
+        setSheetSyncInfo({
+          status: 'error',
+          message: res.message || 'Chưa có dữ liệu tồn kho trên Google Sheet.',
+        });
+        if (isManual) {
+          alert(res.message || 'Chưa có dữ liệu tồn kho trên Google Sheet hoặc chưa cấu hình URL trong Cài đặt.');
+        }
       }
     } catch (e: any) {
-      alert(`Lỗi đồng bộ Google Sheet: ${e.message}`);
+      setSheetSyncInfo({
+        status: 'error',
+        message: `Lỗi kết nối: ${e.message}`,
+      });
+      if (isManual) {
+        alert(`Lỗi đồng bộ Google Sheet: ${e.message}`);
+      }
     } finally {
       setIsFetchingSheet(false);
     }
+  };
+
+  const handleFetchGoogleSheetStocks = () => {
+    syncStocksFromSheet(true);
   };
 
   // Nộp báo cáo và bàn giao sang ca tiếp theo
@@ -718,6 +784,7 @@ export default function Home() {
               onRecalculateAllReceipts={handleRecalculateAllReceipts}
               onFetchGoogleSheetStocks={handleFetchGoogleSheetStocks}
               isFetchingSheet={isFetchingSheet}
+              sheetSyncInfo={sheetSyncInfo}
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
